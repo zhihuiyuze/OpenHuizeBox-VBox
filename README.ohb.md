@@ -75,6 +75,30 @@ OpenHuizeBox is not affiliated with or endorsed by Oracle. See
 and [`NOTICE`](https://github.com/zhihuiyuze/OpenHuizeBox/blob/main/NOTICE)
 in the parent project.
 
+## Developing against this fork
+
+The full developer-onboarding map lives in the **parent project**:
+[`zhihuiyuze/OpenHuizeBox/DEVELOPING.md`](https://github.com/zhihuiyuze/OpenHuizeBox/blob/main/DEVELOPING.md).
+Build flow, toolchain install, code layout, where-to-hook-in — all there.
+
+Fork-specific tips:
+
+- Build from the **parent project's** checkout. Running
+  `build\local_build.ps1` in the parent invokes `kmk` against this
+  submodule and handles branding + sign + package in one shot.
+- **Do not** rebuild this fork standalone. Upstream `configure.vbs`
+  assumes a full Oracle dev layout (Linux host tools, kBuild, 3rd-party
+  tarballs); the parent project's wrapper handles the Windows-host
+  shortcuts.
+- Before touching anything in `src/VBox/Frontends/VirtualBox/src/settings/`
+  or `src/VBox/Frontends/VirtualBox/src/manager/`, read
+  [`PATCHES.md`](https://github.com/zhihuiyuze/OpenHuizeBox/blob/main/PATCHES.md)
+  in the parent project — we keep that diff intentionally small.
+- Scanner findings inside Oracle upstream paths (`src/libs/`,
+  `src/VBox/Devices/PC/ipxe/`, `src/VBox/Runtime/testcase/`, etc.) are
+  upstream content. Do not alter. The parent project's
+  `prepublic_checkup.py` excludes them explicitly.
+
 ## Issue tracking
 
 This repository does **not** accept issues directly. File issues against
