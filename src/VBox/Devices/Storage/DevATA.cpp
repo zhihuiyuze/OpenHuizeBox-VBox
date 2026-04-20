@@ -8229,7 +8229,7 @@ static DECLCALLBACK(int) ataR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
                     }
 
                     rc = pHlp->pfnCFGMQueryStringDef(pCfgNode, "ModelNumber", pIf->szModelNumber, sizeof(pIf->szModelNumber),
-                                                     pIf->fATAPI ? "VBOX CD-ROM" : "VBOX HARDDISK");
+                                                     pIf->fATAPI ? "HL-DT-ST DVD+/-RW GU90N" : "Samsung SSD 870 EVO");
                     if (RT_FAILURE(rc))
                     {
                         if (rc == VERR_CFGM_NOT_ENOUGH_SPACE)

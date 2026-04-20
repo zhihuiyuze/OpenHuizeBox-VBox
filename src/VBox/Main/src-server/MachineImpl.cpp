@@ -265,7 +265,7 @@ Machine::HWData::HWData()
 
     mKeyboardHIDType = KeyboardHIDType_PS2Keyboard;
     mPointingHIDType = PointingHIDType_PS2Mouse;
-    mParavirtProvider = ParavirtProvider_Default;
+    mParavirtProvider = ParavirtProvider_None;
     mEmulatedUSBCardReaderEnabled = FALSE;
 
     for (size_t i = 0; i < RT_ELEMENTS(mCPUAttached); ++i)

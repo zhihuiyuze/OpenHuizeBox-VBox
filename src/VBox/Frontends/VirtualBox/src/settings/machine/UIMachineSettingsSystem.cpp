@@ -26,11 +26,25 @@
  */
 
 /* Qt includes: */
+#include <QComboBox>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QGroupBox>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLabel>
+#include <QMessageBox>
+#include <QProcess>
+#include <QPushButton>
+#include <QRandomGenerator>
 #include <QVBoxLayout>
 
 /* GUI includes: */
 #include "QITabWidget.h"
 #include "UIAccelerationFeaturesEditor.h"
+#include "UIOhbHelpers.h"
 #include "UIBaseMemoryEditor.h"
 #include "UIBootOrderEditor.h"
 #include "UIChipsetEditor.h"
@@ -736,7 +750,7 @@ void UIMachineSettingsSystem::prepareTabMotherboard()
         if (pLayoutMotherboard)
         {
             pLayoutMotherboard->setColumnStretch(1, 1);
-            pLayoutMotherboard->setRowStretch(6, 1);
+            pLayoutMotherboard->setRowStretch(7, 1);
 #ifdef VBOX_WS_MAC
             /* On Mac OS X we can do a bit of smoothness: */
             int iLeft, iTop, iRight, iBottom;
@@ -791,6 +805,11 @@ void UIMachineSettingsSystem::prepareTabMotherboard()
                 m_pTabMotherboard->addEditor(m_pEditorMotherboardFeatures);
                 pLayoutMotherboard->addWidget(m_pEditorMotherboardFeatures, 5, 0);
             }
+
+            /* OpenHuizeBox profile-picker - SMBIOS / ACPI / BIOS identity */
+            UIOhb::attachProfileBox(pLayoutMotherboard, 6, m_pTabMotherboard,
+                [this]() -> CMachine { return m_machine; },
+                QString::fromUtf8("SMBIOS tables (System/BIOS/Board/Chassis/CPU/Memory) + ACPI OEM"));
         }
 
         addEditor(m_pTabMotherboard);
@@ -809,7 +828,7 @@ void UIMachineSettingsSystem::prepareTabProcessor()
         if (pLayoutProcessor)
         {
             pLayoutProcessor->setColumnStretch(1, 1);
-            pLayoutProcessor->setRowStretch(3, 1);
+            pLayoutProcessor->setRowStretch(4, 1);
 #ifdef VBOX_WS_MAC
             /* On Mac OS X we can do a bit of smoothness: */
             int iLeft, iTop, iRight, iBottom;
@@ -839,6 +858,134 @@ void UIMachineSettingsSystem::prepareTabProcessor()
             {
                 m_pTabProcessor->addEditor(m_pEditorProcessorFeatures);
                 pLayoutProcessor->addWidget(m_pEditorProcessorFeatures, 2, 0);
+            }
+
+            /* ================================================================
+             *  OpenHuizeBox — Realistic Hardware Identity (per-VM profile)
+             *  Sits in the Processor subtab next to the stock CPU editors.
+             *  Applies a profile's full SMBIOS + ACPI + disk + MAC overrides to
+             *  THIS VM on click, by shelling out to VBoxManage. Bypasses the
+             *  native Settings save-state semantics — takes effect immediately.
+             * ================================================================ */
+            QGroupBox *pOhbBox = new QGroupBox(QString::fromUtf8(
+                "OpenHuizeBox \xE2\x80\x94 Realistic Hardware Identity"), m_pTabProcessor);
+            if (pOhbBox)
+            {
+                QVBoxLayout *pOhbLay = new QVBoxLayout(pOhbBox);
+                QLabel *pOhbInfo = new QLabel(QString::fromUtf8(
+                    "Apply a realistic SMBIOS/DMI + ACPI + disk + MAC identity to this VM. "
+                    "For authorised privacy-audit research only \xE2\x80\x94 see "
+                    "<i>Governance / Acceptable Use</i>."), pOhbBox);
+                pOhbInfo->setWordWrap(true);
+                pOhbInfo->setStyleSheet(QString::fromUtf8("color:#555;"));
+                pOhbLay->addWidget(pOhbInfo);
+
+                QComboBox *pOhbCombo = new QComboBox(pOhbBox);
+                const QString appDir = QCoreApplication::applicationDirPath();
+                QDir profilesDir(appDir + QString::fromUtf8("/../modules/01_hardware_fingerprint/profiles"));
+                for (const QString &p : profilesDir.entryList(QStringList() << QString::fromUtf8("*.json"), QDir::Files))
+                    pOhbCombo->addItem(p);
+                if (pOhbCombo->count() == 0)
+                    pOhbCombo->addItem(QString::fromUtf8("(no profiles found)"));
+                pOhbLay->addWidget(pOhbCombo);
+
+                QPushButton *pOhbApply = new QPushButton(QString::fromUtf8("Apply profile to this VM now"), pOhbBox);
+                pOhbLay->addWidget(pOhbApply);
+
+                QLabel *pOhbStatus = new QLabel(pOhbBox);
+                pOhbStatus->setWordWrap(true);
+                pOhbLay->addWidget(pOhbStatus);
+
+                /* Resolve VM name at click-time, not at widget-construction time:
+                 * m_machine is populated by the Settings dialog AFTER prepareWidgets()
+                 * runs, so a value-capture of m_machine here would freeze an empty
+                 * COM pointer. Capturing `this` instead lets us read the live
+                 * m_machine when the user actually clicks Apply. */
+                QObject::connect(pOhbApply, &QPushButton::clicked, pOhbBox, [this, pOhbCombo, pOhbStatus, appDir, profilesDir]() mutable {
+                    QString vmName = m_machine.isNull() ? QString() : m_machine.GetName();
+                    if (vmName.isEmpty()) {
+                        /* Fallback: ask VBoxManage for the currently-edited VM via UUID. */
+                        const QString vmUuid = m_machine.isNull() ? QString() : m_machine.GetId().toString();
+                        if (!vmUuid.isEmpty()) vmName = vmUuid;
+                    }
+                    if (vmName.isEmpty()) { pOhbStatus->setText(QString::fromUtf8("<span style='color:#b00;'>Cannot resolve VM name (m_machine null — open Settings from an existing VM, not the global preferences dialog).</span>")); return; }
+                    QString chosen = pOhbCombo->currentText();
+                    if (chosen.startsWith(QChar('('))) return;
+                    QFile f(profilesDir.filePath(chosen));
+                    if (!f.open(QIODevice::ReadOnly)) { pOhbStatus->setText(QString::fromUtf8("<span style='color:#b00;'>Cannot read profile.</span>")); return; }
+                    QJsonParseError jpe;
+                    QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &jpe);
+                    f.close();
+                    if (jpe.error != QJsonParseError::NoError) { pOhbStatus->setText(QString::fromUtf8("<span style='color:#b00;'>Profile JSON parse error.</span>")); return; }
+                    QJsonObject pd = doc.object();
+                    QJsonObject extra = pd.value(QString::fromUtf8("extradata")).toObject();
+                    QJsonArray  pmod  = pd.value(QString::fromUtf8("modifyvm_args")).toArray();
+                    QJsonArray  pool  = pd.value(QString::fromUtf8("mac_oui_pool")).toArray();
+                    QJsonObject dids  = pd.value(QString::fromUtf8("disk_identifiers")).toObject();
+                    QJsonObject dtmpl = pd.value(QString::fromUtf8("disk_extradata_template")).toObject();
+                    const QString vbm = appDir + QString::fromUtf8("/VBoxManage.exe");
+                    auto run = [&](const QStringList &args) -> bool {
+                        QProcess pr; pr.start(vbm, args); pr.waitForFinished(15000);
+                        return pr.exitCode() == 0;
+                    };
+                    run(QStringList() << QString::fromUtf8("modifyvm") << vmName
+                                      << QString::fromUtf8("--audio-driver")     << QString::fromUtf8("none")
+                                      << QString::fromUtf8("--paravirtprovider") << QString::fromUtf8("none")
+                                      << QString::fromUtf8("--nested-hw-virt")   << QString::fromUtf8("off"));
+                    for (const QJsonValue &v : pmod) {
+                        QString a = v.toString();
+                        QStringList mv; mv << QString::fromUtf8("modifyvm") << vmName;
+                        int eq = a.indexOf(QChar('='));
+                        if (eq >= 0) mv << a.left(eq) << a.mid(eq + 1); else mv << a;
+                        run(mv);
+                    }
+                    QString macApplied;
+                    if (!pool.isEmpty()) {
+                        QString oui = pool[QRandomGenerator::global()->bounded(pool.size())].toString();
+                        oui.remove(QChar(':'));
+                        QString nic;
+                        for (int i = 0; i < 6; ++i) nic += QString::fromLatin1("%1").arg(QRandomGenerator::global()->bounded(16), 1, 16);
+                        macApplied = (oui + nic).toUpper();
+                        run(QStringList() << QString::fromUtf8("modifyvm") << vmName
+                                          << QString::fromUtf8("--macaddress1") << macApplied);
+                    }
+                    int applied = 0;
+                    for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) {
+                        QString v = it.value().toString();
+                        if (v == QString::fromUtf8("__RUNTIME_PER_VM_UUID__")) {
+                            v.clear();
+                            static const char hex[] = "0123456789abcdef";
+                            for (int i = 0; i < 32; ++i) {
+                                v += QChar(hex[QRandomGenerator::global()->bounded(16)]);
+                                if (i == 7 || i == 11 || i == 15 || i == 19) v += QChar('-');
+                            }
+                        }
+                        if (run(QStringList() << QString::fromUtf8("setextradata") << vmName << it.key() << v))
+                            ++applied;
+                    }
+                    const QString hddModel = dids.value(QString::fromUtf8("hdd_model")).toString();
+                    QString hddSerial = dids.value(QString::fromUtf8("hdd_serial")).toString();
+                    if (hddSerial == QString::fromUtf8("__RUNTIME_PER_VM_SERIAL__")) {
+                        hddSerial.clear();
+                        for (int i = 0; i < 16; ++i)
+                            hddSerial += QString::fromLatin1("%1").arg(QRandomGenerator::global()->bounded(16), 1, 16).toUpper();
+                    }
+                    int diskApplied = 0;
+                    for (auto it = dtmpl.constBegin(); it != dtmpl.constEnd(); ++it) {
+                        QString val = it.value().toString();
+                        val.replace(QString::fromUtf8("{hdd_model}"),  hddModel);
+                        val.replace(QString::fromUtf8("{hdd_serial}"), hddSerial);
+                        if (run(QStringList() << QString::fromUtf8("setextradata") << vmName << it.key() << val))
+                            ++diskApplied;
+                    }
+                    pOhbStatus->setText(QString::fromUtf8(
+                        "<span style='color:#0a7a0a;'>Applied <b>%1</b> \xE2\x86\x92 VM <b>%2</b>: "
+                        "%3 extradata + %4 disk, MAC <code>%5</code>. Close and reopen Settings to see "
+                        "the refreshed values in the Advanced / Storage tabs.</span>")
+                        .arg(chosen).arg(vmName).arg(applied).arg(diskApplied)
+                        .arg(macApplied.isEmpty() ? QString::fromUtf8("(unchanged)") : macApplied));
+                });
+                pLayoutProcessor->addWidget(pOhbBox, 3, 0, 1, 2);
             }
         }
 

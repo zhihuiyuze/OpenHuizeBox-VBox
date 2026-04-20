@@ -32,6 +32,7 @@
 #include "UIConverter.h"
 #include "UIErrorString.h"
 #include "UIMachineSettingsStorage.h"
+#include "UIOhbHelpers.h"
 #include "UIMedium.h"
 #include "UIMediumEnumerator.h"
 #include "UIStorageSettingsEditor.h"
@@ -497,6 +498,16 @@ void UIMachineSettingsStorage::prepareWidgets()
             addEditor(m_pEditorStorageSettings);
             m_pEditorStorageSettings->setActionPool(m_pActionPool);
             pLayout->addWidget(m_pEditorStorageSettings);
+        }
+
+        /* OpenHuizeBox profile-picker - Storage disk model/serial/firmware identity */
+        {
+            QGroupBox *pOhbBox = UIOhb::buildProfileBox(this,
+                [this]() -> CMachine { return m_machine; },
+                QString::fromUtf8("Disk ModelNumber + SerialNumber + FirmwareRevision "
+                                  "(AHCI + IDE LUN#0) - takes effect once a disk is attached"));
+            if (pOhbBox)
+                pLayout->addWidget(pOhbBox);
         }
     }
 }

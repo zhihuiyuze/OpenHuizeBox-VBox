@@ -840,6 +840,9 @@ class VisualCPPState
             LogPrint "The Visual C++ compiler ('" & strClExe & "') version isn't really supported, but may work: " & strVer
          elseif InStr(1, strVer, "19.2") = 1 then
             m_strVersion = "VCC142"
+         elseif InStr(1, strVer, "19.3") = 1 Or InStr(1, strVer, "19.4") = 1 Or InStr(1, strVer, "19.5") = 1 Or InStr(1, strVer, "19.6") = 1 then
+            m_strVersion = "VCC142"
+            LogPrint "Modern cl.exe (" & strVer & ") treated as VCC142 for build-rule selection."
          else
             LogPrint "The Visual C++ compiler we found ('" & strClExe & "') isn't in the 10.0-19.2x range (" & strVer & ")."
             LogPrint "Check the build requirements and select the appropriate compiler version."
@@ -1494,10 +1497,10 @@ sub CheckForlibSDL(strOptlibSDL)
    ' Success?
    if strPathlibSDL = "" then
       if strOptlibSDL = "" then
-         MsgError "Can't locate libSDL. Try specify the path with the --with-libSDL=<path> argument. " _
+         MsgWarning "Can't locate libSDL. Try specify the path with the --with-libSDL=<path> argument. " _
                 & "If still no luck, consult the configure.log and the build requirements."
       else
-         MsgError "Can't locate libSDL. Please consult the configure.log and the build requirements."
+         MsgWarning "Can't locate libSDL. Please consult the configure.log and the build requirements."
       end if
       exit sub
    end if

@@ -1182,12 +1182,10 @@ HRESULT SystemProperties::getSupportedExportOptions(std::vector<ExportOptions_T>
 
 HRESULT SystemProperties::getSupportedGraphicsFeatures(std::vector<GraphicsFeature_T> &aSupportedGraphicsFeatures)
 {
-#if defined(RT_ARCH_X86) || defined(RT_ARCH_AMD64)
+#if (defined(RT_ARCH_X86) || defined(RT_ARCH_AMD64)) && defined(VBOX_WITH_3D_ACCELERATION)
     static const GraphicsFeature_T s_aGraphicsFeatures[] =
     {
-# ifdef VBOX_WITH_3D_ACCELERATION
         GraphicsFeature_Acceleration3D
-# endif
     };
     RT_CPP_VECTOR_ASSIGN_ARRAY(aSupportedGraphicsFeatures, s_aGraphicsFeatures);
 #else

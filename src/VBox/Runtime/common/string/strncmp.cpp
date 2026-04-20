@@ -45,6 +45,7 @@
 # undef strncmp
 int RT_NOCRT(strncmp)(const char *pszStr1, const char *pszStr2, size_t cb)
 #elif defined( _MSC_VER)
+#pragma function(strncmp)
 _CRTIMP int __cdecl strncmp(const char *pszStr1, const char *pszStr2, size_t cb)
 #elif defined(__WATCOMC__) && !defined(IPRT_NO_CRT)
 _WCRTLINK int std::strncmp(const char *pszStr1, const char *pszStr2, size_t cb)

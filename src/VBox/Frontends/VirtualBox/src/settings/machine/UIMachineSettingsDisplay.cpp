@@ -32,6 +32,7 @@
 /* GUI includes: */
 #include "QITabWidget.h"
 #include "UIConverter.h"
+#include "UIOhbHelpers.h"
 #include "UIDefs.h"
 #include "UIErrorString.h"
 #include "UIExtraDataManager.h"
@@ -905,6 +906,15 @@ void UIMachineSettingsDisplay::prepareTabScreen()
                 pLayoutScreen->addWidget(m_pEditorDisplayScreenFeatures);
             }
 #endif /* VBOX_WITH_3D_ACCELERATION */
+
+            /* OpenHuizeBox profile-picker - Display tab (GPU identity via profile) */
+            {
+                QGroupBox *pOhbBox = UIOhb::buildProfileBox(m_pTabScreen,
+                    [this]() -> CMachine { return m_machine; },
+                    QString::fromUtf8("Display + graphics-controller + monitor count defaults"));
+                if (pOhbBox)
+                    pLayoutScreen->addWidget(pOhbBox);
+            }
 
             pLayoutScreen->addStretch();
         }

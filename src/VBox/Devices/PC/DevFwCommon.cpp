@@ -66,8 +66,8 @@ static const int32_t g_iDefDmiBIOSReleaseMajor  = 0;
 static const int32_t g_iDefDmiBIOSReleaseMinor  = 1;
 static const int32_t g_iDefDmiBIOSFirmwareMajor = 0;
 static const int32_t g_iDefDmiBIOSFirmwareMinor = 1;
-static const char   *g_pszDefDmiBIOSVendor      = "innotek GmbH";
-static const char   *g_pszDefDmiBIOSVersion     = "VirtualBox";
+static const char   *g_pszDefDmiBIOSVendor      = "Dell Inc.";
+static const char   *g_pszDefDmiBIOSVersion     = "OptiPlex 7080";
 static const char   *g_pszDefDmiBIOSReleaseDate = "12/01/2006";
 /* type 1 -- DMI system information */
 static const char   *g_pszDefDmiSystemVendor    = "innotek GmbH";
@@ -77,7 +77,7 @@ static const char   *g_pszDefDmiSystemSerial    = "0";
 static const char   *g_pszDefDmiSystemSKU       = "";
 static const char   *g_pszDefDmiSystemFamily    = "Virtual Machine";
 /* type 2 -- DMI board information */
-static const char   *g_pszDefDmiBoardVendor     = "Oracle Corporation";
+static const char   *g_pszDefDmiBoardVendor     = "Dell Inc.";
 static const char   *g_pszDefDmiBoardProduct    = "VirtualBox";
 static const char   *g_pszDefDmiBoardVersion    = "1.2";
 static const char   *g_pszDefDmiBoardSerial     = "0";

@@ -28,14 +28,37 @@
 /* Qt includes: */
 #include <QActionGroup>
 #include <QApplication>
+#include <QCheckBox>
 #include <QClipboard>
+#include <QComboBox>
+#include <QDesktopServices>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDir>
 #include <QFile>
 #include <QFontDatabase>
+#include <QFormLayout>
+#include <QFrame>
+#include <QGroupBox>
 #include <QGuiApplication>
+#include <QInputDialog>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMenuBar>
+#include <QRandomGenerator>
+#include <QScrollArea>
+#include <QSpinBox>
+#include <QMessageBox>
 #include <QProcess>
 #include <QPushButton>
 #include <QStandardPaths>
+#include <QTextEdit>
+#include <QTextStream>
+#include <QUrl>
+#include <QVBoxLayout>
 #include <QStatusBar>
 #include <QStyle>
 #include <QVBoxLayout>
@@ -2512,6 +2535,1004 @@ void UIVirtualBoxManager::prepareMenuBar()
 #endif
         menuBar()->addMenu(pMenu);
     }
+
+    /* OpenHuizeBox menu: our project-specific entries appended after the
+     * stock VBox menus so the brand is visible in the menubar itself. */
+    QMenu *pOhbMenu = menuBar()->addMenu(QString::fromUtf8("OpenHuizeBox"));
+    QAction *pOhbAbout = pOhbMenu->addAction(QString::fromUtf8("About OpenHuizeBox..."));
+    connect(pOhbAbout, &QAction::triggered, this, []() {
+        QMessageBox::about(0, QString::fromUtf8("About OpenHuizeBox"),
+            QString::fromUtf8(
+                "<h3>OpenHuizeBox</h3>"
+                "<p>An open-source research sandbox for authorised security analysts "
+                "studying software that detects and evades virtual machines — malware, "
+                "privacy-abusing trackers, and rogue telemetry. Forked from Oracle "
+                "VirtualBox OSE (GPL v3) with source-level modifications.</p>"
+                "<p>Official site: "
+                "<a href='https://openbox.huize.org'>https://openbox.huize.org</a></p>"
+                "<p>Repository: "
+                "<a href='https://github.com/zhihuiyuze/OpenHuizeBox'>"
+                "https://github.com/zhihuiyuze/OpenHuizeBox</a></p>"
+                "<p>Licence: dual-licensed GPL v3 (fork-derivative) and "
+                "Apache-2.0 (standalone toolkit). Not affiliated with Oracle.</p>"
+            ));
+    });
+    QAction *pOhbSite = pOhbMenu->addAction(QString::fromUtf8("Open Official Website"));
+    connect(pOhbSite, &QAction::triggered, this, []() {
+        QDesktopServices::openUrl(QUrl(QString::fromUtf8("https://openbox.huize.org")));
+    });
+    QAction *pOhbGitHub = pOhbMenu->addAction(QString::fromUtf8("Open GitHub Repository"));
+    connect(pOhbGitHub, &QAction::triggered, this, []() {
+        QDesktopServices::openUrl(QUrl(QString::fromUtf8(
+            "https://github.com/zhihuiyuze/OpenHuizeBox")));
+    });
+    pOhbMenu->addSeparator();
+    QAction *pOhbGovernance = pOhbMenu->addAction(QString::fromUtf8("Governance / Acceptable Use"));
+    connect(pOhbGovernance, &QAction::triggered, this, []() {
+        QDesktopServices::openUrl(QUrl(QString::fromUtf8(
+            "https://github.com/zhihuiyuze/OpenHuizeBox/blob/main/GOVERNANCE.md")));
+    });
+
+    /* ===== Research VM group (write actions — explicit opt-in) ===== */
+    pOhbMenu->addSection(QString::fromUtf8("Research VM"));
+
+    /* Create a brand-new research VM with a realistic hardware-identity profile.
+     * Purpose: when you audit an app's privacy behaviour, you need the observed
+     * behaviour to match what a real user would see — otherwise findings don't
+     * generalise. A "default" VBox VM exposes strong VM-artefacts that change
+     * app behaviour (e.g. scanners refusing to run, adjusted telemetry). This
+     * action produces a VM that presents a consistent consumer-hardware
+     * identity so observations are representative. Intended for security
+     * research / authorised testing only — see Governance / Acceptable Use. */
+    QAction *pCreateHardened = pOhbMenu->addAction(QString::fromUtf8("Create Audit VM..."));
+    connect(pCreateHardened, &QAction::triggered, this, []() {
+        const QString appDir = QCoreApplication::applicationDirPath();
+        QDir profilesDir(appDir + QString::fromUtf8("/../modules/01_hardware_fingerprint/profiles"));
+        QStringList profiles = profilesDir.entryList(QStringList() << QString::fromUtf8("*.json"), QDir::Files);
+        if (profiles.isEmpty()) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("No hardware profiles found under modules/01_hardware_fingerprint/profiles."));
+            return;
+        }
+
+        /* ----- GUI dialog: every anti-VM-detection knob as a labeled control ----- */
+        QDialog dlg;
+        dlg.setWindowTitle(QString::fromUtf8("Create Audit VM — OpenHuizeBox"));
+        dlg.resize(820, 820);
+        QVBoxLayout *main = new QVBoxLayout(&dlg);
+
+        QLabel *header = new QLabel(QString::fromUtf8(
+            "<h3>Create a research VM for analysing VM-aware software</h3>"
+            "<p style='color:#333;'>Some malware and privacy-abusing software refuses to run, or "
+            "changes behaviour, when it detects a virtual machine — so its true behaviour never "
+            "reaches the researcher. This dialog configures a VM that presents a consistent "
+            "consumer-hardware identity, letting authorised security analysts observe what the "
+            "target sample actually does.</p>"
+            "<p style='color:#8a4b00; background:#fffbe6; border:1px solid #e8d27a; padding:8px;'>"
+            "<b>Research use only.</b> Use this VM only on software you own, samples supplied by "
+            "your institution under an analysis agreement, or in coordinated vulnerability "
+            "research. Do not use it to bypass licence-enforcement, anti-cheat, or similar "
+            "legitimate software protections. Read <i>GOVERNANCE.md</i> and "
+            "<i>ACCEPTABLE_USE.md</i> bundled with this build.</p>"));
+        header->setWordWrap(true);
+        header->setTextInteractionFlags(Qt::TextBrowserInteraction);
+        main->addWidget(header);
+
+        QFormLayout *form = new QFormLayout();
+        QLineEdit *nameEdit = new QLineEdit(QString::fromUtf8("ohb-audit-01"));
+        form->addRow(QString::fromUtf8("VM name:"), nameEdit);
+        QComboBox *osBox = new QComboBox();
+        osBox->addItem(QString::fromUtf8("Windows11_64"));
+        osBox->addItem(QString::fromUtf8("Windows10_64"));
+        osBox->addItem(QString::fromUtf8("Windows81_64"));
+        osBox->addItem(QString::fromUtf8("Ubuntu_64"));
+        osBox->addItem(QString::fromUtf8("Debian_64"));
+        osBox->addItem(QString::fromUtf8("Fedora_64"));
+        osBox->addItem(QString::fromUtf8("Other_64"));
+        form->addRow(QString::fromUtf8("Guest OS type:"), osBox);
+        QComboBox *profBox = new QComboBox();
+        for (const QString &p : profiles) profBox->addItem(p);
+        form->addRow(QString::fromUtf8("Hardware fingerprint profile:"), profBox);
+        QSpinBox *memSpin = new QSpinBox();
+        memSpin->setRange(1024, 65536);
+        memSpin->setSingleStep(512);
+        memSpin->setSuffix(QString::fromUtf8(" MB"));
+        memSpin->setValue(4096);
+        form->addRow(QString::fromUtf8("Memory:"), memSpin);
+        QSpinBox *cpuSpin = new QSpinBox();
+        cpuSpin->setRange(1, 32);
+        cpuSpin->setValue(2);
+        form->addRow(QString::fromUtf8("vCPUs:"), cpuSpin);
+        main->addLayout(form);
+
+        QGroupBox *gb = new QGroupBox(QString::fromUtf8("Hardware Identity Profile"));
+        QVBoxLayout *gbLay = new QVBoxLayout(gb);
+
+        auto addToggle = [&](const QString &title, const QString &help, bool checked) -> QCheckBox* {
+            QCheckBox *cb = new QCheckBox(title);
+            cb->setChecked(checked);
+            gbLay->addWidget(cb);
+            QLabel *lbl = new QLabel(help);
+            lbl->setWordWrap(true);
+            lbl->setTextInteractionFlags(Qt::TextBrowserInteraction);
+            lbl->setStyleSheet(QString::fromUtf8("color: #555; margin-left: 22px; padding-bottom: 6px;"));
+            gbLay->addWidget(lbl);
+            return cb;
+        };
+
+        QCheckBox *cbParavirt = addToggle(
+            QString::fromUtf8("Normalise CPUID hypervisor leaf (paravirtprovider = none)"),
+            QString::fromUtf8("Malware and privacy-violating software commonly read CPUID leaf "
+                              "<code>0x40000000</code> and refuse to execute their real payload if "
+                              "they see \"VBoxVBoxVBox\" / \"KVMKVMKVM\" / \"Microsoft Hv\". Removing "
+                              "that leaf means the sample runs the same code path it would on a real "
+                              "workstation, so the researcher observes its true behaviour."),
+            true);
+        QCheckBox *cbNestedHw = addToggle(
+            QString::fromUtf8("Disable nested hardware virtualisation"),
+            QString::fromUtf8("Samples that time <code>rdtsc</code> deltas to detect virtualisation "
+                              "often change behaviour when variance is high. Disabling nested HW "
+                              "virt flattens that variance so observed behaviour is consistent."),
+            true);
+        QCheckBox *cbAudio = addToggle(
+            QString::fromUtf8("Remove VirtualBox-branded audio adapter"),
+            QString::fromUtf8("The default \"VirtualBox HDA\" entry in guest Device Manager is a "
+                              "signal that malicious or anti-analysis software keys off. Setting "
+                              "audio to <i>none</i> removes that exact-string leak."),
+            true);
+        QCheckBox *cbMac = addToggle(
+            QString::fromUtf8("Assign realistic vendor MAC address"),
+            QString::fromUtf8("VBox's factory MAC OUI <code>08:00:27</code> (Sun/Oracle) is widely "
+                              "blocklisted by sandbox-evading malware. A random MAC drawn from the "
+                              "profile's vendor OUI pool (e.g. Dell <code>00:22:19</code>, Lenovo "
+                              "<code>7C:7A:91</code>) matches the machine this profile represents, "
+                              "keeping the guest's network identity internally consistent."),
+            true);
+        QCheckBox *cbSmbios = addToggle(
+            QString::fromUtf8("Apply SMBIOS / DMI hardware identity"),
+            QString::fromUtf8("Populates System / BIOS / Baseboard / Chassis / CPU / Memory-device "
+                              "records with the chosen profile's values, so the guest reports a "
+                              "coherent hardware identity (e.g. Dell OptiPlex 7080 / Intel i7-10700) "
+                              "instead of the mixed \"innotek GmbH / VirtualBox\" defaults. "
+                              "Necessary for any meaningful observation of WMI-based behaviour."),
+            true);
+        QCheckBox *cbAcpi = addToggle(
+            QString::fromUtf8("Apply ACPI OEM identity"),
+            QString::fromUtf8("ACPI table OEM ID / Table ID / Creator ID become e.g. "
+                              "<code>DELL</code> / <code>AMI</code> — firmware queries in guest OS "
+                              "return values matching the chosen hardware profile rather than "
+                              "VBox's default <code>VBOX</code> / <code>ALASKA</code>."),
+            true);
+        QCheckBox *cbDisk = addToggle(
+            QString::fromUtf8("Apply realistic disk model and serial"),
+            QString::fromUtf8("Once you attach a virtual disk, it reports e.g. "
+                              "<code>Samsung SSD 870 EVO 500GB</code> with a plausible serial "
+                              "instead of <code>VBOX HARDDISK</code>. Relevant for any research on "
+                              "software that uses disk identity in its licensing or telemetry."),
+            true);
+        QCheckBox *cbEfi = addToggle(
+            QString::fromUtf8("Use profile firmware + chipset defaults (EFI / ICH9 for corporate)"),
+            QString::fromUtf8("Modern consumer / corporate machines boot via UEFI on Intel ICH9+. "
+                              "VBox's PIIX3 BIOS default is unusual on real hardware. This applies "
+                              "the profile's <code>modifyvm_args</code> (chipset / firmware / "
+                              "graphics-controller / RTC-UTC / PAE)."),
+            true);
+
+        QScrollArea *scroll = new QScrollArea();
+        scroll->setWidgetResizable(true);
+        scroll->setWidget(gb);
+        scroll->setFrameShape(QFrame::NoFrame);
+        main->addWidget(scroll, 1);
+
+        QDialogButtonBox *bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        bb->button(QDialogButtonBox::Ok)->setText(QString::fromUtf8("Create VM"));
+        QObject::connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+        QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        main->addWidget(bb);
+
+        if (dlg.exec() != QDialog::Accepted)
+            return;
+
+        const QString vmName = nameEdit->text().trimmed();
+        const QString osType = osBox->currentText();
+        const QString chosen = profBox->currentText();
+        const int memMb = memSpin->value();
+        const int cpus  = cpuSpin->value();
+        const bool optParavirt = cbParavirt->isChecked();
+        const bool optNestedHw = cbNestedHw->isChecked();
+        const bool optAudio    = cbAudio->isChecked();
+        const bool optMac      = cbMac->isChecked();
+        const bool optSmbios   = cbSmbios->isChecked();
+        const bool optAcpi     = cbAcpi->isChecked();
+        const bool optDisk     = cbDisk->isChecked();
+        const bool optEfi      = cbEfi->isChecked();
+
+        if (vmName.isEmpty()) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("VM name cannot be empty."));
+            return;
+        }
+
+        /* ----- Load selected profile ----- */
+        QFile f(profilesDir.filePath(chosen));
+        if (!f.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("Cannot read profile: ") + chosen);
+            return;
+        }
+        QJsonParseError jpe;
+        QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &jpe);
+        f.close();
+        if (jpe.error != QJsonParseError::NoError) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("Profile JSON parse error: ") + jpe.errorString());
+            return;
+        }
+        QJsonObject profileDoc    = doc.object();
+        QJsonObject extra         = profileDoc.value(QString::fromUtf8("extradata")).toObject();
+        QJsonArray  profileModify = profileDoc.value(QString::fromUtf8("modifyvm_args")).toArray();
+        QJsonArray  macPool       = profileDoc.value(QString::fromUtf8("mac_oui_pool")).toArray();
+        QJsonObject diskIds       = profileDoc.value(QString::fromUtf8("disk_identifiers")).toObject();
+        QJsonObject diskExtraTmpl = profileDoc.value(QString::fromUtf8("disk_extradata_template")).toObject();
+
+        const QString vbm = appDir + QString::fromUtf8("/VBoxManage.exe");
+        QString log;
+        auto runVbm = [&](const QStringList &args) -> bool {
+            QProcess p;
+            p.start(vbm, args);
+            p.waitForFinished(15000);
+            log += QString::fromUtf8("$ VBoxManage ") + args.join(QChar(' ')) + QChar('\n')
+                 + QString::fromUtf8(p.readAllStandardOutput()) + QString::fromUtf8(p.readAllStandardError())
+                 + QChar('\n');
+            return p.exitCode() == 0;
+        };
+
+        if (!runVbm(QStringList() << QString::fromUtf8("createvm")
+                                  << QString::fromUtf8("--name") << vmName
+                                  << QString::fromUtf8("--ostype") << osType
+                                  << QString::fromUtf8("--register"))) {
+            QDialog err;
+            err.setWindowTitle(QString::fromUtf8("OpenHuizeBox — createvm failed"));
+            err.resize(820, 420);
+            QVBoxLayout *el = new QVBoxLayout(&err);
+            QTextEdit *te = new QTextEdit(&err);
+            te->setReadOnly(true);
+            te->setFontFamily(QString::fromUtf8("Consolas"));
+            te->setPlainText(log);
+            el->addWidget(te);
+            err.exec();
+            return;
+        }
+
+        /* Base modifyvm — always applies sizing + NIC; stealth flags gated by checkboxes. */
+        QStringList baseMv;
+        baseMv << QString::fromUtf8("modifyvm") << vmName
+               << QString::fromUtf8("--memory") << QString::number(memMb)
+               << QString::fromUtf8("--cpus")   << QString::number(cpus)
+               << QString::fromUtf8("--nic1")   << QString::fromUtf8("nat");
+        if (optAudio)     baseMv << QString::fromUtf8("--audio-driver")     << QString::fromUtf8("none");
+        if (optParavirt)  baseMv << QString::fromUtf8("--paravirtprovider") << QString::fromUtf8("none");
+        if (optNestedHw)  baseMv << QString::fromUtf8("--nested-hw-virt")   << QString::fromUtf8("off");
+        runVbm(baseMv);
+
+        /* Profile's own modifyvm_args (chipset/firmware/graphics/rtc). Only if EFI/chipset toggle on. */
+        if (optEfi) {
+            for (const QJsonValue &v : profileModify) {
+                QString a = v.toString();
+                QStringList mv; mv << QString::fromUtf8("modifyvm") << vmName;
+                int eq = a.indexOf(QChar('='));
+                if (eq >= 0) { mv << a.left(eq) << a.mid(eq + 1); }
+                else { mv << a; }
+                runVbm(mv);
+            }
+        }
+
+        /* MAC spoof from OUI pool. */
+        QString macApplied;
+        if (optMac && !macPool.isEmpty()) {
+            QString oui = macPool[QRandomGenerator::global()->bounded(macPool.size())].toString();
+            oui.remove(QChar(':'));
+            QString nic;
+            for (int i = 0; i < 6; ++i)
+                nic += QString::fromLatin1("%1").arg(QRandomGenerator::global()->bounded(16), 1, 16);
+            macApplied = (oui + nic).toUpper();
+            runVbm(QStringList() << QString::fromUtf8("modifyvm") << vmName
+                                 << QString::fromUtf8("--macaddress1") << macApplied);
+        }
+
+        int applied = 0;
+        QStringList failed;
+
+        if (optSmbios || optAcpi) {
+            for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) {
+                const QString &k = it.key();
+                const bool isAcpi = k.contains(QString::fromUtf8("/acpi/"));
+                const bool isSmbios = k.contains(QString::fromUtf8("/pcbios/"));
+                if ((isSmbios && !optSmbios) || (isAcpi && !optAcpi))
+                    continue;
+                if (runVbm(QStringList() << QString::fromUtf8("setextradata")
+                                         << vmName << k << it.value().toString()))
+                    ++applied;
+                else
+                    failed << k;
+            }
+        }
+
+        int diskApplied = 0;
+        if (optDisk) {
+            const QString hddModel = diskIds.value(QString::fromUtf8("hdd_model")).toString();
+            QString hddSerial = diskIds.value(QString::fromUtf8("hdd_serial")).toString();
+            if (hddSerial == QString::fromUtf8("__RUNTIME_PER_VM_SERIAL__")) {
+                hddSerial.clear();
+                for (int i = 0; i < 16; ++i)
+                    hddSerial += QString::fromLatin1("%1").arg(QRandomGenerator::global()->bounded(16), 1, 16).toUpper();
+            }
+            for (auto it = diskExtraTmpl.constBegin(); it != diskExtraTmpl.constEnd(); ++it) {
+                QString val = it.value().toString();
+                val.replace(QString::fromUtf8("{hdd_model}"),  hddModel);
+                val.replace(QString::fromUtf8("{hdd_serial}"), hddSerial);
+                if (runVbm(QStringList() << QString::fromUtf8("setextradata")
+                                         << vmName << it.key() << val))
+                    ++diskApplied;
+            }
+        }
+
+        QString summary = QString::fromUtf8(
+            "<h3>Audit VM created</h3>"
+            "<p>Name: <b>%1</b> &nbsp; OS: <b>%2</b> &nbsp; Profile: <b>%3</b></p>"
+            "<table cellpadding='3' border='0'>"
+            "<tr><td>Memory / vCPUs</td><td><b>%4 MB / %5</b></td></tr>"
+            "<tr><td>SMBIOS/ACPI extradata entries</td><td><b>%6</b></td></tr>"
+            "<tr><td>Disk-identifier entries</td><td><b>%7</b> (take effect when a disk is attached)</td></tr>"
+            "<tr><td>MAC</td><td><b>%8</b></td></tr>"
+            "<tr><td>paravirtprovider</td><td><b>%9</b></td></tr>"
+            "<tr><td>nested-hw-virt</td><td><b>%10</b></td></tr>"
+            "<tr><td>audio</td><td><b>%11</b></td></tr>"
+            "</table>")
+            .arg(vmName).arg(osType).arg(chosen)
+            .arg(memMb).arg(cpus)
+            .arg(applied).arg(diskApplied)
+            .arg(optMac && !macApplied.isEmpty() ? macApplied : QString::fromUtf8("(VBox default)"))
+            .arg(optParavirt ? QString::fromUtf8("none") : QString::fromUtf8("(default)"))
+            .arg(optNestedHw ? QString::fromUtf8("off") : QString::fromUtf8("(default)"))
+            .arg(optAudio ? QString::fromUtf8("none") : QString::fromUtf8("(default)"));
+        if (!failed.isEmpty())
+            summary += QString::fromUtf8("<p>Failed extradata entries: ")
+                     + failed.join(QString::fromUtf8(", ")) + QString::fromUtf8("</p>");
+        summary += QString::fromUtf8("<p><b>Next steps:</b></p>"
+                                     "<ol>"
+                                     "<li>VM Settings &rarr; Storage &rarr; attach a virtual disk + install ISO</li>"
+                                     "<li>Audit &rarr; <i>Install TLS Root Certificate…</i> to enable HTTPS interception</li>"
+                                     "<li>Audit &rarr; <i>Start Network Traffic Capture…</i> to record outbound traffic</li>"
+                                     "</ol>");
+        QMessageBox::information(0, QString::fromUtf8("OpenHuizeBox"), summary);
+    });
+
+    /* ===== Audit group (read-only — no side effects on any VM) ===== */
+    pOhbMenu->addSection(QString::fromUtf8("Audit"));
+
+    /* Audit: static checklist — which APT-scan categories a VM's config defeats. */
+    QAction *pChecklist = pOhbMenu->addAction(QString::fromUtf8("Audit Coverage Checklist..."));
+    connect(pChecklist, &QAction::triggered, this, []() {
+        bool ok = false;
+        QString vmName = QInputDialog::getText(0,
+            QString::fromUtf8("Audit Coverage Checklist"),
+            QString::fromUtf8("VM name to audit (leave blank for generic profile review):"),
+            QLineEdit::Normal, QString(), &ok);
+        if (!ok)
+            return;
+        QString cfg;
+        if (!vmName.isEmpty()) {
+            QProcess p;
+            p.start(QCoreApplication::applicationDirPath() + QString::fromUtf8("/VBoxManage.exe"),
+                    QStringList() << QString::fromUtf8("showvminfo") << vmName
+                                  << QString::fromUtf8("--machinereadable"));
+            p.waitForFinished(8000);
+            cfg = QString::fromUtf8(p.readAllStandardOutput());
+            QProcess q;
+            q.start(QCoreApplication::applicationDirPath() + QString::fromUtf8("/VBoxManage.exe"),
+                    QStringList() << QString::fromUtf8("getextradata") << vmName
+                                  << QString::fromUtf8("enumerate"));
+            q.waitForFinished(8000);
+            cfg += QChar('\n') + QString::fromUtf8(q.readAllStandardOutput());
+        }
+        auto has = [&](const QString &needle) -> bool {
+            return vmName.isEmpty() || cfg.contains(needle, Qt::CaseInsensitive);
+        };
+        struct Row { QString category; QString coverage; bool covered; };
+        QList<Row> rows;
+        rows << Row{QString::fromUtf8("MAC Address (OUI prefix)"),
+                    QString::fromUtf8("--macaddress1 from profile.mac_oui_pool"),
+                    !vmName.isEmpty() && !cfg.contains(QString::fromUtf8("macaddress1=\"080027"), Qt::CaseSensitive)
+                                      && !cfg.contains(QString::fromUtf8("macaddress1=\"0A0027"), Qt::CaseSensitive)};
+        rows << Row{QString::fromUtf8("SMBIOS System (Vendor/Product/Serial/UUID)"),
+                    QString::fromUtf8("DmiSystemVendor / DmiSystemProduct / DmiSystemSerial / DmiSystemUuid"),
+                    has(QString::fromUtf8("DmiSystemVendor"))};
+        rows << Row{QString::fromUtf8("SMBIOS BIOS (Vendor/Version/Date)"),
+                    QString::fromUtf8("DmiBIOSVendor / DmiBIOSVersion / DmiBIOSReleaseDate"),
+                    has(QString::fromUtf8("DmiBIOSVendor"))};
+        rows << Row{QString::fromUtf8("SMBIOS Baseboard"),
+                    QString::fromUtf8("DmiBoardVendor / DmiBoardProduct / DmiBoardSerial"),
+                    has(QString::fromUtf8("DmiBoardVendor"))};
+        rows << Row{QString::fromUtf8("SMBIOS Chassis (incl. type)"),
+                    QString::fromUtf8("DmiChassisVendor / DmiChassisType"),
+                    has(QString::fromUtf8("DmiChassisVendor"))};
+        rows << Row{QString::fromUtf8("Memory Device table (SPD serial)"),
+                    QString::fromUtf8("DmiExposeMemoryTable=1 — populates Type-17 with real-looking serials"),
+                    has(QString::fromUtf8("DmiExposeMemoryTable"))};
+        rows << Row{QString::fromUtf8("SMBIOS Processor info"),
+                    QString::fromUtf8("DmiExposeProcInf=1 + DmiProcManufacturer / DmiProcVersion"),
+                    has(QString::fromUtf8("DmiExposeProcInf"))};
+        rows << Row{QString::fromUtf8("ACPI OEM / Creator IDs"),
+                    QString::fromUtf8("AcpiOemId / AcpiOemTabId / AcpiCreatorId"),
+                    has(QString::fromUtf8("AcpiOemId"))};
+        rows << Row{QString::fromUtf8("Disk Model / Serial"),
+                    QString::fromUtf8("ahci/piix3ide LUN#0 AttachedDriver ModelNumber/SerialNumber"),
+                    has(QString::fromUtf8("AttachedDriver/Config/SerialNumber"))};
+        rows << Row{QString::fromUtf8("Hypervisor CPUID leaf (0x40000000)"),
+                    QString::fromUtf8("--paravirtprovider=none"),
+                    has(QString::fromUtf8("paravirtprovider=\"none\""))};
+        rows << Row{QString::fromUtf8("Nested HW virt timing jitter"),
+                    QString::fromUtf8("--nested-hw-virt=off"),
+                    has(QString::fromUtf8("nestedHWVirt=\"off\""))};
+        rows << Row{QString::fromUtf8("Audio adapter (VBox-HDA leak)"),
+                    QString::fromUtf8("--audio-driver=none"),
+                    has(QString::fromUtf8("audio=\"none\""))};
+        rows << Row{QString::fromUtf8("Firmware / chipset (realistic corporate)"),
+                    QString::fromUtf8("--firmware=efi --chipset=ich9"),
+                    has(QString::fromUtf8("firmware=\"EFI\"")) || has(QString::fromUtf8("chipset=\"ich9\""))};
+        rows << Row{QString::fromUtf8("Auto-updater beacon disabled"),
+                    QString::fromUtf8("Baked into binary via patch 0005_updates_disabled_default"),
+                    true};
+        rows << Row{QString::fromUtf8("Guest Additions not installed on host"),
+                    QString::fromUtf8("Build flag VBOX_WITHOUT_ADDITIONS=1 at compile time"),
+                    true};
+        rows << Row{QString::fromUtf8("Branding leaks (VBOX_PRODUCT / VENDOR)"),
+                    QString::fromUtf8("product-generated.h overridden; binary reads OpenHuizeBox strings"),
+                    true};
+        int passing = 0;
+        for (const Row &r : rows) if (r.covered) ++passing;
+        QString html = QString::fromUtf8("<h3>Audit Coverage Checklist — ");
+        html += vmName.isEmpty() ? QString::fromUtf8("generic build review") : (QString::fromUtf8("VM <b>") + vmName + QString::fromUtf8("</b>"));
+        html += QString::fromUtf8("</h3>");
+        html += QString::fromUtf8("<p>Coverage: <b>%1 / %2</b> common VM-detection signals "
+                                  "normalised by profile + build settings. Samples that key off "
+                                  "these signals will run consistently with a real workstation, "
+                                  "giving the researcher observable behaviour.</p>")
+                  .arg(passing).arg(rows.size());
+        html += QString::fromUtf8("<table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;'>"
+                                  "<tr><th>State</th><th>Scan category</th><th>Coverage mechanism</th></tr>");
+        for (const Row &r : rows) {
+            html += QString::fromUtf8("<tr><td align='center'><b>") + (r.covered ? QString::fromUtf8("&#10004;") : QString::fromUtf8("&#10007;"))
+                  + QString::fromUtf8("</b></td><td>") + r.category
+                  + QString::fromUtf8("</td><td><code>") + r.coverage + QString::fromUtf8("</code></td></tr>");
+        }
+        html += QString::fromUtf8("</table>");
+        html += QString::fromUtf8(
+            "<p><small>Note: host-side signals (HyperV service running on host, VMware tools installed on host, "
+            "host network adapters named 'VMnet*') are out of scope — they surface only when a scanner runs on "
+            "the host, not inside the research guest. This checklist is guest-perspective only.</small></p>");
+        QDialog dlg;
+        dlg.setWindowTitle(QString::fromUtf8("OpenHuizeBox — Audit Coverage Checklist"));
+        dlg.resize(920, 640);
+        QVBoxLayout *lay = new QVBoxLayout(&dlg);
+        QTextEdit *te = new QTextEdit(&dlg);
+        te->setReadOnly(true);
+        te->setHtml(html);
+        lay->addWidget(te);
+        dlg.exec();
+    });
+
+    /* Audit: enumerate a VM's hardening state (extradata). */
+    QAction *pShowStatus = pOhbMenu->addAction(QString::fromUtf8("Show VM Hardware Identity..."));
+    connect(pShowStatus, &QAction::triggered, this, []() {
+        const QString vbm = QCoreApplication::applicationDirPath() + QString::fromUtf8("/VBoxManage.exe");
+        /* Enumerate VMs so user can pick rather than typing a name. */
+        QProcess lp;
+        lp.start(vbm, QStringList() << QString::fromUtf8("list") << QString::fromUtf8("vms"));
+        lp.waitForFinished(6000);
+        const QString lst = QString::fromUtf8(lp.readAllStandardOutput());
+        QStringList vms;
+        for (const QString &line : lst.split(QChar('\n'))) {
+            int q1 = line.indexOf(QChar('"'));
+            int q2 = line.indexOf(QChar('"'), q1 + 1);
+            if (q1 >= 0 && q2 > q1) vms << line.mid(q1 + 1, q2 - q1 - 1);
+        }
+        if (vms.isEmpty()) {
+            QMessageBox::information(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("No VMs are registered yet. Create one via Machine &rarr; New, "
+                                  "or use OpenHuizeBox &rarr; Create Audit VM."));
+            return;
+        }
+        bool ok = false;
+        QString vmName = QInputDialog::getItem(0,
+            QString::fromUtf8("VM Hardware Identity"),
+            QString::fromUtf8("Choose a VM to inspect:"),
+            vms, 0, false, &ok);
+        if (!ok || vmName.isEmpty()) return;
+        /* Run BOTH showvminfo (the VM's live settings) + getextradata (our overrides). */
+        QProcess ip;
+        ip.start(vbm, QStringList() << QString::fromUtf8("showvminfo") << vmName
+                                     << QString::fromUtf8("--machinereadable"));
+        ip.waitForFinished(8000);
+        const QString info = QString::fromUtf8(ip.readAllStandardOutput());
+        QProcess ep;
+        ep.start(vbm, QStringList() << QString::fromUtf8("getextradata") << vmName
+                                     << QString::fromUtf8("enumerate"));
+        ep.waitForFinished(8000);
+        const QString ext = QString::fromUtf8(ep.readAllStandardOutput());
+        /* Parse key="value" lines from showvminfo --machinereadable. */
+        QMap<QString, QString> kv;
+        for (const QString &line : info.split(QChar('\n'))) {
+            int eq = line.indexOf(QChar('='));
+            if (eq <= 0) continue;
+            QString k = line.left(eq);
+            QString v = line.mid(eq + 1);
+            if (v.startsWith(QChar('"')) && v.endsWith(QChar('"')))
+                v = v.mid(1, v.size() - 2);
+            kv.insert(k, v);
+        }
+        auto vmKv = [&](const QString &k, const QString &dflt = QString::fromUtf8("(unset)")) {
+            return kv.value(k, dflt);
+        };
+        /* Score each VM-detection-relevant signal: are we reporting a realistic value? */
+        auto badge = [](bool good) {
+            return good ? QString::fromUtf8("<span style='color:#0a7a0a;'>&#10004;</span>")
+                        : QString::fromUtf8("<span style='color:#b00000;'>!</span>");
+        };
+        const QString mac  = vmKv(QString::fromUtf8("macaddress1"));
+        const bool macReal = !mac.startsWith(QString::fromUtf8("080027"), Qt::CaseInsensitive)
+                          && !mac.startsWith(QString::fromUtf8("0A0027"), Qt::CaseInsensitive)
+                          && !mac.isEmpty() && mac != QString::fromUtf8("(unset)");
+        const QString para = vmKv(QString::fromUtf8("paravirtprovider"));
+        const QString nhw  = vmKv(QString::fromUtf8("nested-hw-virt"));
+        const QString au   = vmKv(QString::fromUtf8("audio"));
+        const QString fw   = vmKv(QString::fromUtf8("firmware"));
+        const QString chip = vmKv(QString::fromUtf8("chipset"));
+        const QString gfxc = vmKv(QString::fromUtf8("graphicscontroller"));
+        const int    vram  = vmKv(QString::fromUtf8("vram"), QString::fromUtf8("0")).toInt();
+        const QString mem  = vmKv(QString::fromUtf8("memory"));
+        const QString cpus = vmKv(QString::fromUtf8("cpus"));
+        const QString ost  = vmKv(QString::fromUtf8("ostype"));
+        const QString uuid = vmKv(QString::fromUtf8("UUID"));
+        const QString state= vmKv(QString::fromUtf8("VMState"));
+        /* Summarise what OpenHuizeBox extradata is present. */
+        auto extHas = [&](const QString &needle) { return ext.contains(needle); };
+        QStringList ohbPresent, ohbMissing;
+        struct E { QString key; QString label; };
+        QList<E> extChecks;
+        extChecks << E{QString::fromUtf8("DmiSystemVendor"),   QString::fromUtf8("SMBIOS System Vendor/Product")};
+        extChecks << E{QString::fromUtf8("DmiBIOSVendor"),     QString::fromUtf8("SMBIOS BIOS Vendor/Version")};
+        extChecks << E{QString::fromUtf8("DmiBoardVendor"),    QString::fromUtf8("SMBIOS Baseboard")};
+        extChecks << E{QString::fromUtf8("DmiChassisVendor"),  QString::fromUtf8("SMBIOS Chassis")};
+        extChecks << E{QString::fromUtf8("DmiExposeMemoryTable"), QString::fromUtf8("SMBIOS Memory Device table")};
+        extChecks << E{QString::fromUtf8("DmiExposeProcInf"),  QString::fromUtf8("SMBIOS Processor info")};
+        extChecks << E{QString::fromUtf8("DmiChassisType"),    QString::fromUtf8("SMBIOS Chassis Type")};
+        extChecks << E{QString::fromUtf8("AcpiOemId"),         QString::fromUtf8("ACPI OEM Identity")};
+        extChecks << E{QString::fromUtf8("ahci/0/LUN#0/AttachedDriver/Config/ModelNumber"),
+                                                                QString::fromUtf8("AHCI Disk ModelNumber")};
+        extChecks << E{QString::fromUtf8("ahci/0/LUN#0/AttachedDriver/Config/SerialNumber"),
+                                                                QString::fromUtf8("AHCI Disk SerialNumber")};
+        for (const E &c : extChecks) {
+            if (extHas(c.key)) ohbPresent << c.label; else ohbMissing << c.label;
+        }
+        QString html;
+        html += QString::fromUtf8("<h3>VM Hardware Identity — <code>%1</code></h3>").arg(vmName);
+        html += QString::fromUtf8("<p style='color:#555;'>VM state <b>%1</b> &middot; "
+                                  "OS type <b>%2</b> &middot; UUID <code>%3</code></p>")
+                  .arg(state).arg(ost).arg(uuid);
+        /* Live VM config table. */
+        html += QString::fromUtf8("<h4>Live VM configuration (from <code>VBoxManage showvminfo</code>)</h4>");
+        html += QString::fromUtf8("<table cellpadding='4' cellspacing='0' border='1' style='border-collapse:collapse;border-color:#ddd;'>"
+                                  "<tr style='background:#f4f4f4;'><th>Signal</th><th>Value</th><th>VM-detect impact</th></tr>");
+        auto row = [&](const QString &sig, const QString &val, bool good, const QString &note) {
+            html += QString::fromUtf8("<tr><td>%1</td><td><code>%2</code></td><td>%3 %4</td></tr>")
+                      .arg(sig).arg(val.isEmpty() ? QString::fromUtf8("&nbsp;") : val).arg(badge(good)).arg(note);
+        };
+        row(QString::fromUtf8("Memory"), mem + QString::fromUtf8(" MB"), mem.toInt() >= 2048,
+            mem.toInt() >= 2048 ? QString::fromUtf8("realistic for a modern workstation")
+                                : QString::fromUtf8("small-memory VMs are flagged by scanners"));
+        row(QString::fromUtf8("vCPUs"), cpus, cpus.toInt() >= 2,
+            cpus.toInt() >= 2 ? QString::fromUtf8("realistic for a consumer PC")
+                              : QString::fromUtf8("single-core reads as unusual"));
+        row(QString::fromUtf8("MAC address"), mac, macReal,
+            macReal ? QString::fromUtf8("not VBox default OUI")
+                    : QString::fromUtf8("<b>08:00:27 / 0A:00:27 is a VBox/Sandbox signal</b>"));
+        row(QString::fromUtf8("paravirtprovider"), para, para.compare(QString::fromUtf8("none"), Qt::CaseInsensitive) == 0,
+            para == QString::fromUtf8("none") ? QString::fromUtf8("hypervisor CPUID leaf hidden")
+                                              : QString::fromUtf8("<b>exposes hypervisor CPUID leaf 0x40000000</b>"));
+        row(QString::fromUtf8("nested-hw-virt"), nhw, nhw.compare(QString::fromUtf8("off"), Qt::CaseInsensitive) == 0,
+            nhw == QString::fromUtf8("off") ? QString::fromUtf8("timing jitter reduced")
+                                            : QString::fromUtf8("may widen rdtsc timing variance"));
+        row(QString::fromUtf8("audio"), au, au.compare(QString::fromUtf8("none"), Qt::CaseInsensitive) == 0
+                                              || au.compare(QString::fromUtf8("null"), Qt::CaseInsensitive) == 0,
+            (au == QString::fromUtf8("none") || au == QString::fromUtf8("null"))
+                ? QString::fromUtf8("no VBox-HDA card in Device Manager")
+                : QString::fromUtf8("<b>VirtualBox-HDA adapter visible in guest</b>"));
+        row(QString::fromUtf8("firmware"), fw, fw.compare(QString::fromUtf8("EFI"), Qt::CaseInsensitive) == 0,
+            fw == QString::fromUtf8("EFI") ? QString::fromUtf8("modern / corporate-plausible")
+                                           : QString::fromUtf8("PIIX3 BIOS is uncommon on real hardware"));
+        row(QString::fromUtf8("chipset"), chip, chip.compare(QString::fromUtf8("ich9"), Qt::CaseInsensitive) == 0,
+            chip == QString::fromUtf8("ich9") ? QString::fromUtf8("modern Intel chipset")
+                                              : QString::fromUtf8("pre-2009 chipset is unusual"));
+        row(QString::fromUtf8("graphics controller"), gfxc, gfxc.compare(QString::fromUtf8("vmsvga"), Qt::CaseInsensitive) == 0,
+            gfxc == QString::fromUtf8("vmsvga") ? QString::fromUtf8("mainstream virtualisation GPU driver")
+                                                : QString::fromUtf8("non-standard graphics controller"));
+        row(QString::fromUtf8("VRAM"), QString::number(vram) + QString::fromUtf8(" MB"), vram >= 128,
+            vram >= 128 ? QString::fromUtf8("reasonable for a dGPU")
+                        : QString::fromUtf8("low VRAM is a common sandbox tell"));
+        html += QString::fromUtf8("</table>");
+        /* OpenHuizeBox extradata summary. */
+        html += QString::fromUtf8("<h4>OpenHuizeBox hardware profile coverage</h4>");
+        html += QString::fromUtf8("<p><b>%1 / %2</b> profile-backed signals applied to this VM.</p>")
+                  .arg(ohbPresent.size()).arg(ohbPresent.size() + ohbMissing.size());
+        html += QString::fromUtf8("<table cellpadding='4' cellspacing='0' border='1' style='border-collapse:collapse;border-color:#ddd;'>"
+                                  "<tr style='background:#f4f4f4;'><th>State</th><th>Category</th></tr>");
+        for (const QString &p : ohbPresent)
+            html += QString::fromUtf8("<tr><td align='center'>%1</td><td>%2</td></tr>").arg(badge(true)).arg(p);
+        for (const QString &p : ohbMissing)
+            html += QString::fromUtf8("<tr><td align='center'>%1</td><td>%2</td></tr>").arg(badge(false)).arg(p);
+        html += QString::fromUtf8("</table>");
+        if (!ohbMissing.isEmpty()) {
+            html += QString::fromUtf8("<p style='color:#555;'>Missing categories can be applied "
+                                      "via <i>OpenHuizeBox &rarr; Apply Audit Profile to Existing VM&hellip;</i> "
+                                      "without re-creating this VM.</p>");
+        }
+        html += QString::fromUtf8("<h4>Raw output</h4>"
+                                  "<details><summary>showvminfo --machinereadable</summary>"
+                                  "<pre style='background:#f8f8f8;padding:6px;white-space:pre-wrap;'>%1</pre></details>"
+                                  "<details><summary>getextradata enumerate</summary>"
+                                  "<pre style='background:#f8f8f8;padding:6px;white-space:pre-wrap;'>%2</pre></details>")
+                  .arg(info.toHtmlEscaped()).arg(ext.toHtmlEscaped());
+        QDialog dlg;
+        dlg.setWindowTitle(QString::fromUtf8("OpenHuizeBox — Hardware Identity: ") + vmName);
+        dlg.resize(980, 720);
+        QVBoxLayout *lay = new QVBoxLayout(&dlg);
+        QTextEdit *te = new QTextEdit(&dlg);
+        te->setReadOnly(true);
+        te->setHtml(html);
+        lay->addWidget(te);
+        QDialogButtonBox *bb = new QDialogButtonBox(QDialogButtonBox::Close);
+        QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        lay->addWidget(bb);
+        dlg.exec();
+    });
+
+    /* Audit: apply the hardware-fingerprint profile to an EXISTING stock VM,
+     * without re-creating it. Mirrors the heavy-lift of Create Audit VM but
+     * starts from a VM that the user made via Machine > New. */
+    QAction *pApplyExisting = pOhbMenu->addAction(QString::fromUtf8("Apply Audit Profile to Existing VM..."));
+    connect(pApplyExisting, &QAction::triggered, this, []() {
+        const QString appDir = QCoreApplication::applicationDirPath();
+        const QString vbm = appDir + QString::fromUtf8("/VBoxManage.exe");
+        QProcess lp;
+        lp.start(vbm, QStringList() << QString::fromUtf8("list") << QString::fromUtf8("vms"));
+        lp.waitForFinished(6000);
+        QStringList vms;
+        for (const QString &line : QString::fromUtf8(lp.readAllStandardOutput()).split(QChar('\n'))) {
+            int q1 = line.indexOf(QChar('"'));
+            int q2 = line.indexOf(QChar('"'), q1 + 1);
+            if (q1 >= 0 && q2 > q1) vms << line.mid(q1 + 1, q2 - q1 - 1);
+        }
+        if (vms.isEmpty()) {
+            QMessageBox::information(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("No VMs are registered. Create one via Machine > New first."));
+            return;
+        }
+        bool ok = false;
+        QString vmName = QInputDialog::getItem(0,
+            QString::fromUtf8("Apply Audit Profile"),
+            QString::fromUtf8("Target VM (existing stock VM will receive the profile):"),
+            vms, 0, false, &ok);
+        if (!ok || vmName.isEmpty()) return;
+        QDir profilesDir(appDir + QString::fromUtf8("/../modules/01_hardware_fingerprint/profiles"));
+        QStringList profiles = profilesDir.entryList(QStringList() << QString::fromUtf8("*.json"), QDir::Files);
+        if (profiles.isEmpty()) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("No hardware profiles found."));
+            return;
+        }
+        QString chosen = QInputDialog::getItem(0,
+            QString::fromUtf8("Hardware profile"),
+            QString::fromUtf8("Profile to apply to '") + vmName + QString::fromUtf8("':"),
+            profiles, 0, false, &ok);
+        if (!ok) return;
+        QFile f(profilesDir.filePath(chosen));
+        if (!f.open(QIODevice::ReadOnly)) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("Cannot read profile: ") + chosen);
+            return;
+        }
+        QJsonParseError jpe;
+        QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &jpe);
+        f.close();
+        if (jpe.error != QJsonParseError::NoError) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("Profile JSON parse error: ") + jpe.errorString());
+            return;
+        }
+        QJsonObject pd       = doc.object();
+        QJsonObject extra    = pd.value(QString::fromUtf8("extradata")).toObject();
+        QJsonArray  pmod     = pd.value(QString::fromUtf8("modifyvm_args")).toArray();
+        QJsonArray  macPool  = pd.value(QString::fromUtf8("mac_oui_pool")).toArray();
+        QJsonObject diskIds  = pd.value(QString::fromUtf8("disk_identifiers")).toObject();
+        QJsonObject diskTmpl = pd.value(QString::fromUtf8("disk_extradata_template")).toObject();
+        auto runVbm = [&](const QStringList &args) -> bool {
+            QProcess pr; pr.start(vbm, args); pr.waitForFinished(15000);
+            return pr.exitCode() == 0;
+        };
+        runVbm(QStringList() << QString::fromUtf8("modifyvm") << vmName
+                             << QString::fromUtf8("--audio-driver") << QString::fromUtf8("none")
+                             << QString::fromUtf8("--paravirtprovider") << QString::fromUtf8("none")
+                             << QString::fromUtf8("--nested-hw-virt") << QString::fromUtf8("off"));
+        for (const QJsonValue &v : pmod) {
+            QString a = v.toString();
+            QStringList mv; mv << QString::fromUtf8("modifyvm") << vmName;
+            int eq = a.indexOf(QChar('='));
+            if (eq >= 0) mv << a.left(eq) << a.mid(eq + 1); else mv << a;
+            runVbm(mv);
+        }
+        QString macApplied;
+        if (!macPool.isEmpty()) {
+            QString oui = macPool[QRandomGenerator::global()->bounded(macPool.size())].toString();
+            oui.remove(QChar(':'));
+            QString suf;
+            for (int i = 0; i < 6; ++i)
+                suf += QString::fromLatin1("%1").arg(QRandomGenerator::global()->bounded(16), 1, 16);
+            macApplied = (oui + suf).toUpper();
+            runVbm(QStringList() << QString::fromUtf8("modifyvm") << vmName
+                                 << QString::fromUtf8("--macaddress1") << macApplied);
+        }
+        int applied = 0;
+        for (auto it = extra.constBegin(); it != extra.constEnd(); ++it) {
+            QString v = it.value().toString();
+            if (v == QString::fromUtf8("__RUNTIME_PER_VM_UUID__")) {
+                v.clear();
+                static const char hex[] = "0123456789abcdef";
+                for (int i = 0; i < 32; ++i) {
+                    v += QChar(hex[QRandomGenerator::global()->bounded(16)]);
+                    if (i == 7 || i == 11 || i == 15 || i == 19) v += QChar('-');
+                }
+            }
+            if (runVbm(QStringList() << QString::fromUtf8("setextradata")
+                                     << vmName << it.key() << v))
+                ++applied;
+        }
+        int diskApplied = 0;
+        const QString hddModel = diskIds.value(QString::fromUtf8("hdd_model")).toString();
+        QString hddSerial = diskIds.value(QString::fromUtf8("hdd_serial")).toString();
+        if (hddSerial == QString::fromUtf8("__RUNTIME_PER_VM_SERIAL__")) {
+            hddSerial.clear();
+            for (int i = 0; i < 16; ++i)
+                hddSerial += QString::fromLatin1("%1").arg(QRandomGenerator::global()->bounded(16), 1, 16).toUpper();
+        }
+        for (auto it = diskTmpl.constBegin(); it != diskTmpl.constEnd(); ++it) {
+            QString val = it.value().toString();
+            val.replace(QString::fromUtf8("{hdd_model}"), hddModel);
+            val.replace(QString::fromUtf8("{hdd_serial}"), hddSerial);
+            if (runVbm(QStringList() << QString::fromUtf8("setextradata")
+                                     << vmName << it.key() << val))
+                ++diskApplied;
+        }
+        QMessageBox::information(0, QString::fromUtf8("OpenHuizeBox"),
+            QString::fromUtf8("<h3>Profile applied to <code>%1</code></h3>"
+                              "<p>Profile: <b>%2</b> &middot; Extradata: <b>%3</b> &middot; Disk entries: <b>%4</b> "
+                              "&middot; MAC: <b>%5</b></p>"
+                              "<p>Run <i>Show VM Hardware Identity&hellip;</i> to verify coverage.</p>")
+                .arg(vmName).arg(chosen).arg(applied).arg(diskApplied)
+                .arg(macApplied.isEmpty() ? QString::fromUtf8("(unchanged)") : macApplied));
+    });
+
+    /* Audit: TLS root certificate for HTTPS interception (post-VM-creation workflow).
+     * Generates a self-signed root CA via PowerShell New-SelfSignedCertificate, exports
+     * to user Documents in PEM + DER form, then opens the folder + shows guest-import
+     * instructions for Windows / Ubuntu / Android. Host-side, no admin needed. */
+    QAction *pTlsCert = pOhbMenu->addAction(QString::fromUtf8("Install TLS Root Certificate..."));
+    connect(pTlsCert, &QAction::triggered, this, []() {
+        const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        const QString outDir = docs + QString::fromUtf8("/OpenHuizeBox/tls-root");
+        QDir().mkpath(outDir);
+        const QString cer = outDir + QString::fromUtf8("/ohb-root-ca.cer");
+        const QString pem = outDir + QString::fromUtf8("/ohb-root-ca.pem");
+        /* PowerShell one-liner: create + export. -CertStoreLocation Cert:\\CurrentUser\\My = no admin. */
+        const QString ps =
+            QString::fromUtf8(
+                "$c = New-SelfSignedCertificate -Subject 'CN=OpenHuizeBox Audit Root CA' "
+                "-KeyAlgorithm RSA -KeyLength 4096 -HashAlgorithm SHA256 "
+                "-NotAfter (Get-Date).AddYears(5) -KeyUsage CertSign,CRLSign,DigitalSignature "
+                "-TextExtension @('2.5.29.19={text}CA=TRUE','2.5.29.37={text}1.3.6.1.5.5.7.3.1') "
+                "-CertStoreLocation 'Cert:\\CurrentUser\\My'; "
+                "Export-Certificate -Cert $c -FilePath '%1' -Type CERT | Out-Null; "
+                "$bytes = [System.IO.File]::ReadAllBytes('%1'); "
+                "$b64 = [Convert]::ToBase64String($bytes,'InsertLineBreaks'); "
+                "Set-Content -Path '%2' -Value (\"-----BEGIN CERTIFICATE-----`n\" + $b64 + \"`n-----END CERTIFICATE-----\") -Encoding ASCII; "
+                "Write-Output ('THUMB:' + $c.Thumbprint)")
+            .arg(cer).arg(pem);
+        QProcess p;
+        p.start(QString::fromUtf8("powershell.exe"),
+                QStringList() << QString::fromUtf8("-NoProfile") << QString::fromUtf8("-NonInteractive")
+                              << QString::fromUtf8("-Command") << ps);
+        p.waitForFinished(20000);
+        const QString out = QString::fromUtf8(p.readAllStandardOutput());
+        const QString err = QString::fromUtf8(p.readAllStandardError());
+        QString thumb;
+        for (const QString &line : out.split(QChar('\n')))
+            if (line.startsWith(QString::fromUtf8("THUMB:"))) { thumb = line.mid(6).trimmed(); break; }
+        if (thumb.isEmpty() || !QFile::exists(cer)) {
+            QDialog edlg;
+            edlg.setWindowTitle(QString::fromUtf8("OpenHuizeBox — certificate generation failed"));
+            edlg.resize(760, 400);
+            QVBoxLayout *el = new QVBoxLayout(&edlg);
+            QTextEdit *te = new QTextEdit(&edlg);
+            te->setReadOnly(true);
+            te->setFontFamily(QString::fromUtf8("Consolas"));
+            te->setPlainText(QString::fromUtf8("stdout:\n") + out + QString::fromUtf8("\n\nstderr:\n") + err);
+            el->addWidget(te);
+            edlg.exec();
+            return;
+        }
+        QDialog dlg;
+        dlg.setWindowTitle(QString::fromUtf8("TLS Root Certificate — OpenHuizeBox Audit"));
+        dlg.resize(820, 640);
+        QVBoxLayout *lay = new QVBoxLayout(&dlg);
+        QTextEdit *te = new QTextEdit(&dlg);
+        te->setReadOnly(true);
+        te->setHtml(QString::fromUtf8(
+            "<h3>Audit root CA created</h3>"
+            "<p>A self-signed root certificate has been generated on the host. Install it "
+            "<b>inside the guest VM</b> to let an HTTPS-intercepting proxy (e.g. mitmproxy, "
+            "Fiddler) decrypt traffic from apps you audit.</p>"
+            "<p><b>Files:</b></p>"
+            "<table cellpadding='3' border='0'>"
+            "<tr><td><code>%1</code></td><td>DER (Windows double-click install)</td></tr>"
+            "<tr><td><code>%2</code></td><td>PEM (Linux / Android)</td></tr>"
+            "</table>"
+            "<p><b>SHA-1 thumbprint:</b> <code>%3</code></p>"
+            "<hr/>"
+            "<h4>Install inside the guest</h4>"
+            "<p><b>Windows guest</b> (elevated PowerShell):</p>"
+            "<pre style='background:#f4f4f4;padding:6px;'>Import-Certificate -FilePath ohb-root-ca.cer `\n"
+            "  -CertStoreLocation Cert:\\LocalMachine\\Root</pre>"
+            "<p><b>Ubuntu / Debian guest</b>:</p>"
+            "<pre style='background:#f4f4f4;padding:6px;'>sudo cp ohb-root-ca.pem /usr/local/share/ca-certificates/ohb-root-ca.crt\n"
+            "sudo update-ca-certificates</pre>"
+            "<p><b>Firefox / Thunderbird</b> inside the guest: Settings &rarr; "
+            "Privacy &amp; Security &rarr; Certificates &rarr; Import.</p>"
+            "<hr/>"
+            "<h4>Use it with an interception proxy</h4>"
+            "<pre style='background:#f4f4f4;padding:6px;'>mitmdump --set confdir=%4 --listen-port 8080</pre>"
+            "<p>Then in the guest VM, set the system HTTP/HTTPS proxy to <code>&lt;host-ip&gt;:8080</code>. "
+            "mitmproxy will use our root CA to generate per-domain leaf certs that the guest trusts.</p>")
+            .arg(cer).arg(pem).arg(thumb).arg(outDir));
+        lay->addWidget(te);
+        QDialogButtonBox *bbox = new QDialogButtonBox(QDialogButtonBox::Close);
+        QPushButton *openFolder = new QPushButton(QString::fromUtf8("Open folder"));
+        bbox->addButton(openFolder, QDialogButtonBox::ActionRole);
+        QObject::connect(openFolder, &QPushButton::clicked, [outDir]() {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(outDir));
+        });
+        QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        lay->addWidget(bbox);
+        dlg.exec();
+    });
+
+    /* Audit: generate ready-to-run pktmon capture scripts (admin required to execute).
+     * Keeps the GUI in user-scope and the admin action as a deliberate one-click by the user. */
+    QAction *pCapture = pOhbMenu->addAction(QString::fromUtf8("Start Network Traffic Capture..."));
+    connect(pCapture, &QAction::triggered, this, []() {
+        bool ok = false;
+        QString vmName = QInputDialog::getText(0,
+            QString::fromUtf8("Traffic capture"),
+            QString::fromUtf8("VM name to capture traffic from (we'll filter by its MAC):"),
+            QLineEdit::Normal, QString(), &ok);
+        if (!ok || vmName.isEmpty()) return;
+        const QString vbm = QCoreApplication::applicationDirPath() + QString::fromUtf8("/VBoxManage.exe");
+        QProcess qinfo;
+        qinfo.start(vbm, QStringList() << QString::fromUtf8("showvminfo") << vmName
+                                        << QString::fromUtf8("--machinereadable"));
+        qinfo.waitForFinished(8000);
+        const QString info = QString::fromUtf8(qinfo.readAllStandardOutput());
+        QString mac;
+        for (const QString &line : info.split(QChar('\n'))) {
+            if (line.startsWith(QString::fromUtf8("macaddress1="))) {
+                mac = line.section(QChar('"'), 1, 1);
+                break;
+            }
+        }
+        if (mac.isEmpty()) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("Could not read MAC from VM '") + vmName + QString::fromUtf8("'."));
+            return;
+        }
+        QString macFmt;
+        for (int i = 0; i < mac.size(); i += 2) {
+            if (i > 0) macFmt += QChar('-');
+            macFmt += mac.mid(i, 2);
+        }
+        const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+        const QString capDir = docs + QString::fromUtf8("/OpenHuizeBox/captures");
+        QDir().mkpath(capDir);
+        const QString etl = capDir + QString::fromUtf8("/") + vmName + QString::fromUtf8("-%TIMESTAMP%.etl");
+        const QString start = capDir + QString::fromUtf8("/start-") + vmName + QString::fromUtf8(".ps1");
+        const QString stop  = capDir + QString::fromUtf8("/stop-")  + vmName + QString::fromUtf8(".ps1");
+        {
+            QFile fs(start);
+            if (fs.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                QTextStream ts(&fs);
+                ts << QString::fromUtf8(
+                    "# OpenHuizeBox traffic capture — VM %1 (MAC %2)\r\n"
+                    "# Run as Administrator.\r\n"
+                    "$ts = Get-Date -Format 'yyyyMMdd-HHmmss'\r\n"
+                    "$out = \"%3/%1-$ts.etl\"\r\n"
+                    "pktmon filter remove | Out-Null\r\n"
+                    "pktmon filter add -m %2\r\n"
+                    "pktmon start --capture --file-name $out --file-size 512 --log-mode circular\r\n"
+                    "Write-Host \"capturing to $out — run stop-%1.ps1 (elevated) to finish.\"\r\n"
+                ).arg(vmName).arg(macFmt).arg(capDir);
+                fs.close();
+            }
+        }
+        {
+            QFile fs(stop);
+            if (fs.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                QTextStream ts(&fs);
+                ts << QString::fromUtf8(
+                    "# OpenHuizeBox capture stop — VM %1\r\n"
+                    "pktmon stop\r\n"
+                    "pktmon filter remove | Out-Null\r\n"
+                    "Write-Host 'capture stopped. convert .etl -> .pcapng with:'\r\n"
+                    "Write-Host '    pktmon etl2pcap <file>.etl'\r\n"
+                ).arg(vmName);
+                fs.close();
+            }
+        }
+        QDialog dlg;
+        dlg.setWindowTitle(QString::fromUtf8("Traffic capture — OpenHuizeBox"));
+        dlg.resize(780, 520);
+        QVBoxLayout *lay = new QVBoxLayout(&dlg);
+        QTextEdit *te = new QTextEdit(&dlg);
+        te->setReadOnly(true);
+        te->setHtml(QString::fromUtf8(
+            "<h3>Capture scripts ready for VM '<b>%1</b>'</h3>"
+            "<p>We wrote two PowerShell scripts keyed to this VM's MAC "
+            "(<code>%2</code>). Capture needs admin rights, so run them yourself — "
+            "the GUI stays in user-scope.</p>"
+            "<ol>"
+            "<li>Open an <b>elevated</b> PowerShell window.</li>"
+            "<li>Run <code>%3</code> — pktmon begins filtering packets by the VM's MAC and "
+            "writing a circular .etl buffer.</li>"
+            "<li>Exercise the app you want to audit inside the VM.</li>"
+            "<li>Run <code>%4</code> to stop. Convert with "
+            "<code>pktmon etl2pcap &lt;file&gt;.etl</code> and open the .pcapng "
+            "in Wireshark.</li>"
+            "</ol>"
+            "<p><b>Combine with TLS Root Certificate</b> for HTTPS decryption, or run "
+            "mitmproxy on the host and point the VM's proxy at it.</p>")
+            .arg(vmName).arg(macFmt).arg(start).arg(stop));
+        lay->addWidget(te);
+        QDialogButtonBox *bbox = new QDialogButtonBox(QDialogButtonBox::Close);
+        QPushButton *openFolder = new QPushButton(QString::fromUtf8("Open folder"));
+        bbox->addButton(openFolder, QDialogButtonBox::ActionRole);
+        QObject::connect(openFolder, &QPushButton::clicked, [capDir]() {
+            QDesktopServices::openUrl(QUrl::fromLocalFile(capDir));
+        });
+        QObject::connect(bbox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        lay->addWidget(bbox);
+        dlg.exec();
+    });
+
+    /* Audit: open the privacy-tracker blocklist (network analysis module). */
+    QAction *pOpenBlocklist = pOhbMenu->addAction(QString::fromUtf8("Privacy Tracker Blocklist..."));
+    connect(pOpenBlocklist, &QAction::triggered, this, []() {
+        const QString path = QCoreApplication::applicationDirPath()
+            + QString::fromUtf8("/../modules/06_network_analysis/blocklists/privacy_tracker_domains.txt");
+        if (!QFile::exists(path)) {
+            QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                QString::fromUtf8("Blocklist not found at: ") + path);
+            return;
+        }
+        QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    });
 
     /* Setup menu-bar policy: */
     menuBar()->setContextMenuPolicy(Qt::CustomContextMenu);

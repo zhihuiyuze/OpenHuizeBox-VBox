@@ -45,6 +45,7 @@
 # undef strchr
 char *RT_NOCRT(strchr)(const char *pszStr, int ch)
 #elif defined(_MSC_VER)
+#pragma function(strchr)
 _CRTIMP char * __cdecl strchr(const char *pszStr, int ch)
 #elif defined(__WATCOMC__) && !defined(IPRT_NO_CRT)
 _WCRTLINK char *std::strchr(const char *pszStr, int ch)
