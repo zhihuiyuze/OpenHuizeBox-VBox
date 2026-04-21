@@ -455,6 +455,12 @@ typedef struct HM
      * @note Currently only heeded by AMD-V.  */
     bool                        fMissingOS2TlbFlushWorkaround;
 #ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /** OpenHuizeBox: MASTER stealth switch.  When true (CFGM HM/OhbStealth),
+     *  all other fOhb* / u64Ohb* fields get auto-populated with sensible
+     *  defaults at HMR3Init, unless the user pinned them via their own
+     *  CFGM keys.  When false, zero runtime overhead (descriptor-table
+     *  exits disabled, handlers never entered, IDT/GDT pass through). */
+    bool                        fOhbStealthMaster;
     /** OpenHuizeBox: hide descriptor-table accesses via VT-x secondary
      *  control bit 2 (VMX_PROC_CTLS2_DESC_TABLE_EXIT). Seeded from CFGM
      *  key "HM/OhbHideDescTables" at HMR3Init. See
