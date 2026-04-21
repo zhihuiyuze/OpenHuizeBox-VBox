@@ -1104,6 +1104,16 @@ typedef struct HMR0PERVCPU
     uint32_t                    fWorldSwitcher;
     /** The raw host TSC value from the last VM exit (set by HMR0A.asm). */
     uint64_t                    uTscExit;
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /** OpenHuizeBox: accumulator of host cycles spent in the hypervisor
+     *  between the most recent VM-exit and the upcoming VM-resume. Added
+     *  (negated) to the TSC offset before write so the guest's observed
+     *  TSC does not count any time the guest was not actually running.
+     *  Closes the Pafish / Al-Khaser CPUID-forces-VM-exit RDTSC delta
+     *  check: around a trapped instruction the guest's RDTSC now sees
+     *  near-zero cycle cost, matching bare-metal behaviour. */
+    int64_t                     i64OhbTscHandlerAccum;
+#endif
 
     /** VT-x data.   */
     struct HMR0CPUVMX

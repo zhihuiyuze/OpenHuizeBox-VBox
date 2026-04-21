@@ -4527,16 +4527,28 @@ static void hmR0VmxUpdateTscOffsettingAndPreemptTimer(PVMCPUCC pVCpu, PVMXTRANSI
             uTscOffset = CPUMApplyNestedGuestTscOffset(pVCpu, uTscOffset);
 #ifdef VBOX_WITH_OHB_VMX_STEALTH
         /*
-         * OpenHuizeBox: apply operator-configured constant TSC bias.
-         * When master stealth is on (HMR3Init seeds i64OhbTscOffsetBias
-         * = -4096 by default), guest RDTSC reads slightly behind true
-         * host cycles — shrinking the CPUID-exit delta that Pafish and
-         * Al-Khaser measure. When stealth off the bias is 0 (no-op).
-         * The bias wraps arithmetically into the 64-bit offset; guest
-         * just sees a shifted timeline (harmless).
+         * OpenHuizeBox: dual TSC mitigation.
+         *
+         * (a) Constant bias from CFGM: operator-tunable nudge applied
+         *     to every offset calc. Master-stealth default = -4096.
+         *
+         * (b) Dynamic handler-cycle compensation: each VM-exit handler
+         *     consumes host cycles between 'uTscExit' (captured by
+         *     HMR0A.asm right after VMEXIT) and the upcoming VMRESUME.
+         *     Those cycles are accumulated into i64OhbTscHandlerAccum
+         *     by hmR0VmxPostRunGuest. Subtracting the accumulator from
+         *     the guest TSC offset before VMRESUME rewinds guest TSC
+         *     by exactly the VMM's cost — so guest RDTSC around a
+         *     CPUID-forces-VM-exit now reads near-zero delta, matching
+         *     bare-metal. The accumulator grows monotonically over the
+         *     VM lifetime; net guest-visible effect is guest TSC tracks
+         *     'wall clock minus VMM overhead' instead of 'wall clock'.
+         *
+         * When stealth is off both terms are zero → stock VBox.
          */
         PVMCC pVM = pVCpu->CTX_SUFF(pVM);
         uTscOffset += (uint64_t)pVM->hm.s.i64OhbTscOffsetBias;
+        uTscOffset -= (uint64_t)pVCpu->hmr0.s.i64OhbTscHandlerAccum;
 #endif
         hmR0VmxSetTscOffsetVmcs(pVmxTransient->pVmcsInfo, uTscOffset);
         hmR0VmxRemoveProcCtlsVmcs(pVCpu, pVmxTransient, VMX_PROC_CTLS_RDTSC_EXIT);
@@ -6335,6 +6347,40 @@ static void hmR0VmxPostRunGuest(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTransient, int
     STAM_PROFILE_ADV_STOP_START(&pVCpu->hm.s.StatInGC, &pVCpu->hm.s.StatPreExit, x);
     TMNotifyEndOfExecution(pVCpu->CTX_SUFF(pVM), pVCpu, pVCpu->hmr0.s.uTscExit); /* Notify TM that the guest is no longer running. */
     VMCPU_SET_STATE(pVCpu, VMCPUSTATE_STARTED_HM);
+
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /*
+     * OpenHuizeBox: begin dynamic TSC-handler-cost compensation.
+     *
+     * At this point uTscExit already holds the host TSC captured
+     * right after VMEXIT by HMR0A.asm. The delta between 'now' (end
+     * of the critical section of PostRunGuest — when interrupts are
+     * about to be re-enabled) and uTscExit is the host-cycle cost
+     * attributable to the hypervisor for this exit.
+     *
+     * We add that delta to the per-VCPU accumulator. The TSC offset
+     * calculation in hmR0VmxUpdateTscOffsettingAndPreemptTimerVmx (next
+     * VM-entry prep) subtracts the accumulator from the guest TSC
+     * offset, cancelling the cost from the guest's perspective.
+     *
+     * Gate on the master switch; zero cost when stealth is off.
+     */
+    {
+        PVMCC const pVM = pVCpu->CTX_SUFF(pVM);
+        if (pVM->hm.s.fOhbStealthMaster)
+        {
+            uint64_t const uTscNow       = ASMReadTSC();
+            uint64_t const uHandlerCycle = uTscNow - pVCpu->hmr0.s.uTscExit;
+            /* Sanity clamp: if TSC went backwards (host migration between
+             * physical CPUs with unsynchronised TSCs) or if the delta is
+             * implausibly large (>50 million cycles = >15 ms at 3 GHz),
+             * skip this exit so a buggy reading doesn't permanently skew
+             * the guest timeline. */
+            if (uHandlerCycle < UINT64_C(50000000))
+                pVCpu->hmr0.s.i64OhbTscHandlerAccum += (int64_t)uHandlerCycle;
+        }
+    }
+#endif
 
     pVCpu->hmr0.s.vmx.fRestoreHostFlags |= VMX_RESTORE_HOST_REQUIRED;   /* Some host state messed up by VMX needs restoring. */
     pVmcsInfo->fVmcsState = VMX_V_VMCS_LAUNCH_STATE_LAUNCHED;           /* Use VMRESUME instead of VMLAUNCH in the next run. */
