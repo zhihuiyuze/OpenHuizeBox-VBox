@@ -605,6 +605,15 @@ if !defined(VBOX_ONLY_EXTPACKS) && "$(intersects $(KBUILD_TARGET_ARCH),$(VBOX_SU
   	Network/DevEEPROM.cpp
  endif
 
+ # OpenHuizeBox: stealth Wi-Fi PCI stub (identity-only, no BARs/IRQ/DMA).
+ # Makes laptop-profile VMs expose a wireless adapter in guest PCI enumeration
+ # so Check-PCIDevices / Win32_PnPEntity heuristics do not see "laptop w/o Wi-Fi".
+ ifdef VBOX_WITH_OHB_VMX_STEALTH
+  VBoxDD_DEFS           += VBOX_WITH_OHB_VMX_STEALTH
+  VBoxDD_SOURCES        += \
+  	Network/DevOhbWifi.cpp
+ endif
+
  ifdef VBOX_WITH_VIRTIO
   VBoxDD_DEFS           += VBOX_WITH_VIRTIO
   VBoxDD_SOURCES        += \
