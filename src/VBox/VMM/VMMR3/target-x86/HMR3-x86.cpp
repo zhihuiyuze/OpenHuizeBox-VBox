@@ -526,11 +526,30 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
         }
         pVM->hm.s.u16OhbFakeGdtrLimit = u16FakeGdtrLimit;
 
+        /** @cfgm{/HM/OhbTscOffsetBias, int64, stealth ? -4096 : 0}
+         * Constant bias added to every TSC offset write. Negative values
+         * slightly slow the guest's observed TSC relative to host cycles,
+         * reducing the CPUID-triggered RDTSC delta that Pafish and
+         * Al-Khaser use to detect virtualisation. Default is a small
+         * negative bias when stealth is on (guest RDTSC runs ~4k cycles
+         * behind true host; invisible to normal software, enough to
+         * partially hide a CPUID VM-exit's cost). */
+        int64_t const i64DefTscBias = fOhbStealth ? INT64_C(-4096) : INT64_C(0);
+        int64_t i64TscBias = i64DefTscBias;
+        {
+            uint64_t u64Tmp = (uint64_t)i64DefTscBias;
+            rc = CFGMR3QueryU64Def(pCfgHm, "OhbTscOffsetBias", &u64Tmp, (uint64_t)i64DefTscBias);
+            AssertLogRelRCReturn(rc, rc);
+            i64TscBias = (int64_t)u64Tmp;
+        }
+        pVM->hm.s.i64OhbTscOffsetBias = i64TscBias;
+
         if (fOhbStealth)
-            LogRel(("OHB/HM: STEALTH MODE ENABLED. desc-table-exit=%d IDTR=%#RX64/%#x GDTR=%#RX64/%#x\n",
+            LogRel(("OHB/HM: STEALTH MODE ENABLED. desc-table-exit=%d IDTR=%#RX64/%#x GDTR=%#RX64/%#x TscBias=%RI64\n",
                     fOhbHideDescTables,
                     u64FakeIdtrBase, u16FakeIdtrLimit,
-                    u64FakeGdtrBase, u16FakeGdtrLimit));
+                    u64FakeGdtrBase, u16FakeGdtrLimit,
+                    i64TscBias));
         else if (fOhbHideDescTables)
             LogRel(("OHB/HM: desc-table exit ON; fakes IDTR=%#RX64/%#x GDTR=%#RX64/%#x (0=passthrough)\n",
                     u64FakeIdtrBase, u16FakeIdtrLimit,

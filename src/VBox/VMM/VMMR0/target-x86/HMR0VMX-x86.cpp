@@ -4525,6 +4525,19 @@ static void hmR0VmxUpdateTscOffsettingAndPreemptTimer(PVMCPUCC pVCpu, PVMXTRANSI
     {
         if (pVmxTransient->fIsNestedGuest)
             uTscOffset = CPUMApplyNestedGuestTscOffset(pVCpu, uTscOffset);
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+        /*
+         * OpenHuizeBox: apply operator-configured constant TSC bias.
+         * When master stealth is on (HMR3Init seeds i64OhbTscOffsetBias
+         * = -4096 by default), guest RDTSC reads slightly behind true
+         * host cycles — shrinking the CPUID-exit delta that Pafish and
+         * Al-Khaser measure. When stealth off the bias is 0 (no-op).
+         * The bias wraps arithmetically into the 64-bit offset; guest
+         * just sees a shifted timeline (harmless).
+         */
+        PVMCC pVM = pVCpu->CTX_SUFF(pVM);
+        uTscOffset += (uint64_t)pVM->hm.s.i64OhbTscOffsetBias;
+#endif
         hmR0VmxSetTscOffsetVmcs(pVmxTransient->pVmcsInfo, uTscOffset);
         hmR0VmxRemoveProcCtlsVmcs(pVCpu, pVmxTransient, VMX_PROC_CTLS_RDTSC_EXIT);
     }

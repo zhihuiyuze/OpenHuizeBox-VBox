@@ -478,6 +478,13 @@ typedef struct HM
     uint64_t                    u64OhbFakeGdtrBase;
     /** OpenHuizeBox: fake GDTR limit (bytes). Typical = 0x007F for Win10+ x64. */
     uint16_t                    u16OhbFakeGdtrLimit;
+    /** OpenHuizeBox: constant TSC-offset bias applied on every TSC offset
+     *  write to VMCS. Measured in guest-TSC ticks. Negative values make
+     *  the guest's RDTSC appear to run a bit behind true host cycles,
+     *  slightly reducing the CPUID-forces-VM-exit delta that Pafish/
+     *  Al-Khaser measure. 0 = no bias (default, stock). Read from
+     *  CFGM key "HM/OhbTscOffsetBias" at HMR3Init. */
+    int64_t                     i64OhbTscOffsetBias;
 #endif
     /** @} */
 
