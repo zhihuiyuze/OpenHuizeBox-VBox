@@ -460,6 +460,18 @@ typedef struct HM
      *  key "HM/OhbHideDescTables" at HMR3Init. See
      *  src/VBox/VMM/VMMR0/target-x86/OhbVmxStealthR0.{cpp,h}. */
     bool                        fOhbHideDescTables;
+    /** OpenHuizeBox: fake IDTR base address returned by SIDT.  0 = leave
+     *  guest IDTR value untouched (pass-through emulation).  Seeded from
+     *  CFGM key "HM/OhbFakeIdtrBase".  Real-machine-plausible default for
+     *  Windows x64 = 0xFFFFF80000000080 (NT kernel IDT range). */
+    uint64_t                    u64OhbFakeIdtrBase;
+    /** OpenHuizeBox: fake IDTR limit (bytes). Typical = 0x0FFF. */
+    uint16_t                    u16OhbFakeIdtrLimit;
+    /** OpenHuizeBox: fake GDTR base. Windows x64 kernel GDT typically
+     *  lives around 0xFFFFF80000002000+. */
+    uint64_t                    u64OhbFakeGdtrBase;
+    /** OpenHuizeBox: fake GDTR limit (bytes). Typical = 0x007F for Win10+ x64. */
+    uint16_t                    u16OhbFakeGdtrLimit;
 #endif
     /** @} */
 

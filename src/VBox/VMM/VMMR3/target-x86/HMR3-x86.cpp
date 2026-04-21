@@ -459,18 +459,56 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
 #ifdef VBOX_WITH_OHB_VMX_STEALTH
     /** @cfgm{/HM/OhbHideDescTables, bool, false}
      * OpenHuizeBox: enable VT-x descriptor-table exiting (bit 2 of secondary
-     * controls) so SIDT/SGDT/SLDT/STR trap and are emulated via IEM against
-     * the guest CPUM state — defeats classic Red Pill detections
-     * (Pafish/Al-Khaser/VMAware). Off by default; the OHB profile layer
-     * enables it for stealth-enabled VMs.  Only takes effect if the CPU
-     * exposes the secondary control (Penryn+ for Intel).  */
+     * controls) so SIDT/SGDT/SLDT/STR trap and are emulated via IEM. When
+     * combined with /HM/OhbFakeIdtrBase etc., SIDT/SGDT return operator-
+     * configured base addresses instead of the guest's real IDT/GDT —
+     * closing the classic Red Pill detection used by Pafish / Al-Khaser /
+     * VMAware / InviZzzible.
+     *
+     * Off by default; OHB stealth profiles turn it on. Only takes effect
+     * if the CPU exposes the secondary control (Penryn+ for Intel). */
     {
         bool fOhbHideDescTables = false;
         rc = CFGMR3QueryBoolDef(pCfgHm, "OhbHideDescTables", &fOhbHideDescTables, false);
         AssertLogRelRCReturn(rc, rc);
         pVM->hm.s.fOhbHideDescTables = fOhbHideDescTables;
+
+        /** @cfgm{/HM/OhbFakeIdtrBase, uint64, 0}  Value returned by SIDT. 0 = don't rewrite. */
+        /** @cfgm{/HM/OhbFakeIdtrLimit, uint16, 0xFFF} */
+        /** @cfgm{/HM/OhbFakeGdtrBase, uint64, 0}  Value returned by SGDT. 0 = don't rewrite. */
+        /** @cfgm{/HM/OhbFakeGdtrLimit, uint16, 0x7F} */
+        uint64_t u64FakeIdtrBase = 0;
+        rc = CFGMR3QueryU64Def(pCfgHm, "OhbFakeIdtrBase",  &u64FakeIdtrBase, 0);
+        AssertLogRelRCReturn(rc, rc);
+        pVM->hm.s.u64OhbFakeIdtrBase = u64FakeIdtrBase;
+
+        uint16_t u16FakeIdtrLimit = 0x0FFF;
+        {
+            uint32_t u32Tmp = 0x0FFF;
+            rc = CFGMR3QueryU32Def(pCfgHm, "OhbFakeIdtrLimit", &u32Tmp, 0x0FFF);
+            AssertLogRelRCReturn(rc, rc);
+            u16FakeIdtrLimit = (uint16_t)u32Tmp;
+        }
+        pVM->hm.s.u16OhbFakeIdtrLimit = u16FakeIdtrLimit;
+
+        uint64_t u64FakeGdtrBase = 0;
+        rc = CFGMR3QueryU64Def(pCfgHm, "OhbFakeGdtrBase", &u64FakeGdtrBase, 0);
+        AssertLogRelRCReturn(rc, rc);
+        pVM->hm.s.u64OhbFakeGdtrBase = u64FakeGdtrBase;
+
+        uint16_t u16FakeGdtrLimit = 0x007F;
+        {
+            uint32_t u32Tmp = 0x007F;
+            rc = CFGMR3QueryU32Def(pCfgHm, "OhbFakeGdtrLimit", &u32Tmp, 0x007F);
+            AssertLogRelRCReturn(rc, rc);
+            u16FakeGdtrLimit = (uint16_t)u32Tmp;
+        }
+        pVM->hm.s.u16OhbFakeGdtrLimit = u16FakeGdtrLimit;
+
         if (fOhbHideDescTables)
-            LogRel(("OHB/HM: descriptor-table exiting flag set from CFGM (applies at VMCS setup)\n"));
+            LogRel(("OHB/HM: desc-table exit ON; fakes IDTR=%#RX64/%#x GDTR=%#RX64/%#x (0=passthrough)\n",
+                    u64FakeIdtrBase, u16FakeIdtrLimit,
+                    u64FakeGdtrBase, u16FakeGdtrLimit));
     }
 #endif
 

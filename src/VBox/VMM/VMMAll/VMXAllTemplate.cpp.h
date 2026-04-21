@@ -8472,11 +8472,16 @@ HMVMX_EXIT_NSRC_DECL vmxHCExitErrUnexpected(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTr
 /**
  * OpenHuizeBox: VM-exit handler for VMX_EXIT_GDTR_IDTR_ACCESS (reason 46).
  *
- * Covers SGDT / SIDT / LGDT / LIDT. Delegates to IEM which emulates the
- * instruction against the guest CPUM state. The guest CPUM state's
- * IDTR/GDTR cache is what the guest OS itself previously loaded, so
- * SIDT/SGDT return a guest-OS-controlled address — removing the
- * static VBox-typical leak that Red Pill detections fingerprint.
+ * Covers SGDT / SIDT / LGDT / LIDT. The Red-Pill-sensitive cases are
+ * SGDT and SIDT (stores): on stock VBox they leak the guest-set IDT
+ * base, which malware heuristics (Pafish / Al-Khaser / VMAware) match
+ * against known-VM patterns. When the per-VM fake IDTR/GDTR base is
+ * non-zero, we temporarily overwrite the guest CPUM descriptor-table
+ * cache before IEM emulates — IEM then writes the *fake* base+limit to
+ * the guest's memory operand, and we restore the real cache afterwards
+ * so subsequent instruction execution still uses the correct IDT/GDT.
+ *
+ * LGDT / LIDT are loads: we let IEM emulate normally (no swap).
  */
 HMVMX_EXIT_DECL vmxHCExitOhbGdtrIdtrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTransient)
 {
@@ -8485,11 +8490,58 @@ HMVMX_EXIT_DECL vmxHCExitOhbGdtrIdtrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTra
     int rc = vmxHCImportGuestStateEx(pVCpu, pVmxTransient->pVmcsInfo, CPUMCTX_EXTRN_ALL);
     AssertRCReturn(rc, rc);
 
-    Log4Func(("OHB/VMX: GDTR/IDTR exit — %s @ rip=%RX64 qual=%#RX64\n",
+    PVMCC pVM = pVCpu->CTX_SUFF(pVM);
+    uint32_t const uInsn = (uint32_t)((pVmxTransient->uExitQual >> 28) & 0x3);
+    /* 0=SGDT (store), 1=SIDT (store), 2=LGDT (load), 3=LIDT (load). */
+    bool const fIsStore = (uInsn <= 1);
+    bool const fIsSidt  = (uInsn == 1);
+    bool const fIsSgdt  = (uInsn == 0);
+
+    /* Save original descriptor-table cache so we can restore after IEM. */
+    uint64_t const u64SaveIdtrBase  = pVCpu->cpum.GstCtx.idtr.pIdt;
+    uint16_t const u16SaveIdtrLimit = pVCpu->cpum.GstCtx.idtr.cbIdt;
+    uint64_t const u64SaveGdtrBase  = pVCpu->cpum.GstCtx.gdtr.pGdt;
+    uint16_t const u16SaveGdtrLimit = pVCpu->cpum.GstCtx.gdtr.cbGdt;
+
+    bool fSwapped = false;
+    if (fIsStore && pVM->hm.s.fOhbHideDescTables)
+    {
+        if (fIsSidt && pVM->hm.s.u64OhbFakeIdtrBase != 0)
+        {
+            pVCpu->cpum.GstCtx.idtr.pIdt = pVM->hm.s.u64OhbFakeIdtrBase;
+            pVCpu->cpum.GstCtx.idtr.cbIdt = pVM->hm.s.u16OhbFakeIdtrLimit;
+            fSwapped = true;
+        }
+        else if (fIsSgdt && pVM->hm.s.u64OhbFakeGdtrBase != 0)
+        {
+            pVCpu->cpum.GstCtx.gdtr.pGdt = pVM->hm.s.u64OhbFakeGdtrBase;
+            pVCpu->cpum.GstCtx.gdtr.cbGdt = pVM->hm.s.u16OhbFakeGdtrLimit;
+            fSwapped = true;
+        }
+    }
+
+    Log4Func(("OHB/VMX: %s @ rip=%RX64 qual=%#RX64 swap=%d\n",
               ohbVmxDescribeGdtrIdtrExit(pVmxTransient->uExitQual),
-              pVCpu->cpum.GstCtx.rip, pVmxTransient->uExitQual));
+              pVCpu->cpum.GstCtx.rip, pVmxTransient->uExitQual, fSwapped));
 
     VBOXSTRICTRC rcStrict = IEMExecOne(pVCpu);
+
+    /* Restore real descriptor-table cache.  Only restore the one we changed
+       so a load instruction's new value (written into CPUM by IEM) is kept. */
+    if (fSwapped)
+    {
+        if (fIsSidt)
+        {
+            pVCpu->cpum.GstCtx.idtr.pIdt  = u64SaveIdtrBase;
+            pVCpu->cpum.GstCtx.idtr.cbIdt = u16SaveIdtrLimit;
+        }
+        else
+        {
+            pVCpu->cpum.GstCtx.gdtr.pGdt  = u64SaveGdtrBase;
+            pVCpu->cpum.GstCtx.gdtr.cbGdt = u16SaveGdtrLimit;
+        }
+    }
+
     if (rcStrict == VINF_IEM_RAISED_XCPT)
     {
         ASMAtomicUoOrU64(&pVCpu->hm.s.fCtxChanged, HM_CHANGED_RAISED_XCPT_MASK);
@@ -8502,7 +8554,12 @@ HMVMX_EXIT_DECL vmxHCExitOhbGdtrIdtrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTra
 /**
  * OpenHuizeBox: VM-exit handler for VMX_EXIT_LDTR_TR_ACCESS (reason 47).
  *
- * Covers SLDT / STR / LLDT / LTR.
+ * Covers SLDT / STR / LLDT / LTR. SLDT typically returns 0 on real
+ * Windows (no LDT configured); STR returns 0x40 on Win10+ x64 (TSS
+ * selector). Both are plausible, so we let IEM emulate directly.
+ * The exit still produces the right observable behavior — Pafish's
+ * SLDT check (which flags non-zero SLDT as "likely VM") passes
+ * because our guest LDTR is typically 0 anyway.
  */
 HMVMX_EXIT_DECL vmxHCExitOhbLdtrTrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTransient)
 {
@@ -8511,7 +8568,7 @@ HMVMX_EXIT_DECL vmxHCExitOhbLdtrTrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTrans
     int rc = vmxHCImportGuestStateEx(pVCpu, pVmxTransient->pVmcsInfo, CPUMCTX_EXTRN_ALL);
     AssertRCReturn(rc, rc);
 
-    Log4Func(("OHB/VMX: LDTR/TR exit — %s @ rip=%RX64 qual=%#RX64\n",
+    Log4Func(("OHB/VMX: %s @ rip=%RX64 qual=%#RX64\n",
               ohbVmxDescribeLdtrTrExit(pVmxTransient->uExitQual),
               pVCpu->cpum.GstCtx.rip, pVmxTransient->uExitQual));
 
