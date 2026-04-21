@@ -25,7 +25,12 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-DefinitionBlock ("DSDT.aml", "DSDT", 2, "VBOX  ", "VBOXBIOS", 2)
+// OpenHuizeBox: OEM_ID and OEM_TableID changed from "VBOX"/"VBOXBIOS" to
+// AMI Alaska-style strings. These sit at fixed byte offsets in the
+// compiled AML blob (OEM_ID at 0x0A..0x0F, Table_ID at 0x10..0x17) and
+// are read by Check-FirmwareVM (NtQuerySystemInformation SystemFirmwareTableInformation)
+// which compares against "VBOX"/"VirtualBox"/"innotek" literal substrings.
+DefinitionBlock ("DSDT.aml", "DSDT", 2, "ALASKA", "A M I   ", 2)
 {
     // Declare debugging ports withing SystemIO
     OperationRegion(DBG0, SystemIO, 0x3000, 4)
@@ -1490,8 +1495,8 @@ DefinitionBlock ("DSDT.aml", "DSDT", 2, "VBOX  ", "VBOXBIOS", 2)
                     0x04,       // Battery capacity granularity 2
                     "1",        // Model number
                     "0",        // Serial number
-                    "VBOX",     // Battery type
-                    "innotek"   // OEM Information
+                    "LION",     // Battery type (OpenHuizeBox: was "VBOX" — flagged by Check-FirmwareVM ACPI dump)
+                    "Simplo"    // OEM Information (OpenHuizeBox: was "innotek" — flagged)
                 })
 
                 Name (PBST, Package () {

@@ -25,7 +25,8 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 
-DefinitionBlock ("SSDT.aml", "SSDT", 1, "VBOX  ", "VBOXTPMT", 2)
+// OpenHuizeBox: scrub "VBOX" OEM identifiers. See vbox.dsl for rationale.
+DefinitionBlock ("SSDT.aml", "SSDT", 1, "ALASKA", "A M I TPM", 2)
 {
     External(DBG, MethodObj, ,)
 
