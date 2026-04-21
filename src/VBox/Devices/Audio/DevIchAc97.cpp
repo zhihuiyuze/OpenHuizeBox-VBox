@@ -34,6 +34,7 @@
 #include <VBox/vmm/pdmdev.h>
 #include <VBox/vmm/pdmaudioifs.h>
 #include <VBox/vmm/pdmaudioinline.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #include <VBox/AssertGuest.h>
 
 #include <iprt/assert.h>
@@ -4563,6 +4564,8 @@ static DECLCALLBACK(int) ichac97R3Construct(PPDMDEVINS pDevIns, int iInstance, P
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     if (RT_FAILURE(rc))
         return rc;
+    /* OpenHuizeBox: honour per-VM PCI identity override. */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
 
     rc = PDMDevHlpPCIIORegionCreateIo(pDevIns, 0 /*iPciRegion*/, 256 /*cPorts*/,
                                       ichac97IoPortNamWrite, ichac97IoPortNamRead, NULL /*pvUser*/,

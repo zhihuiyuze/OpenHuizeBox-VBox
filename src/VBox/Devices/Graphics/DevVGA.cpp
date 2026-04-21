@@ -101,6 +101,7 @@
 
 /* should go BEFORE any other DevVGA include to make all DevVGA.h config defines be visible */
 #include "DevVGA.h"
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 
 #if defined(IN_RING3) && !defined(VBOX_DEVICE_STRUCT_TESTCASE)
 # include "DevVGAModes.h"
@@ -6723,6 +6724,8 @@ static DECLCALLBACK(int)   vgaR3Construct(PPDMDEVINS pDevIns, int iInstance, PCF
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     if (RT_FAILURE(rc))
         return rc;
+    /* OpenHuizeBox: honour per-VM PCI identity override (VEN_80EE -> NVIDIA/AMD/Intel etc). */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
     /*AssertMsg(pThis->Dev.uDevFn == 16 || iInstance != 0, ("pThis->Dev.uDevFn=%d\n", pThis->Dev.uDevFn));*/
     if (pPciDev->uDevFn != 16 && iInstance == 0)
         Log(("!!WARNING!!: pThis->dev.uDevFn=%d (ignore if testcase or not started by Main)\n", pPciDev->uDevFn));

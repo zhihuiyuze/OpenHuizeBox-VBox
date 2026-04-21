@@ -39,6 +39,7 @@
 #include <VBox/vmm/pdmdev.h>
 #include <VBox/vmm/pdmaudioifs.h>
 #include <VBox/vmm/pdmaudioinline.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #ifdef HDA_DEBUG_GUEST_RIP
 # include <VBox/vmm/cpum.h>
 #endif
@@ -5028,6 +5029,8 @@ static DECLCALLBACK(int) hdaR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
      */
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     AssertRCReturn(rc, rc);
+    /* OpenHuizeBox: honour per-VM PCI identity override (VEN_80EE -> Realtek/Creative etc). */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
 
     /** @todo r=bird: The IOMMMIO_FLAGS_READ_DWORD flag isn't entirely optimal,
      * as several frequently used registers aren't dword sized.  6.0 and earlier
