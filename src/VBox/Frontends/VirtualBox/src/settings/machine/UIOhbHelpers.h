@@ -9,10 +9,12 @@
 #ifndef FEQT_INCLUDED_SRC_settings_machine_UIOhbHelpers_h
 #define FEQT_INCLUDED_SRC_settings_machine_UIOhbHelpers_h
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QJsonArray>
@@ -60,6 +62,65 @@ inline QGroupBox* buildProfileBox(QWidget *pParent,
     pInfo->setWordWrap(true);
     pInfo->setStyleSheet(QString::fromUtf8("color:#555;"));
     pLay->addWidget(pInfo);
+
+    /*
+     * Master Stealth switch - binds the per-VM CFGM key
+     * VBoxInternal/HM/OhbStealth that the fork's HMR3Init reads at
+     * VM start. Checked -> fork enables VMX descriptor-table exiting,
+     * Windows-plausible fake IDTR/GDTR, and the per-device PCI VID
+     * override reader path. Unchecked -> stock VBox speed, zero
+     * VM-exit overhead, VM is detectable.
+     */
+    QCheckBox *pStealthCb = new QCheckBox(QString::fromUtf8(
+        "Stealth mode  (anti-detection)"), pBox);
+    pStealthCb->setToolTip(QString::fromUtf8(
+        "When checked:\n"
+        "  - VT-x descriptor-table exiting is enabled; SIDT / SGDT return\n"
+        "    Windows-kernel-plausible IDT / GDT base addresses (Red Pill defeated).\n"
+        "  - Per-device PCI Vendor / Device ID overrides take effect on VM start.\n"
+        "  - All profile-driven SMBIOS / ACPI / disk / MAC shaping applies.\n"
+        "  - Minor VM-exit overhead on descriptor-table instructions.\n"
+        "\n"
+        "When unchecked:\n"
+        "  - Stock Oracle VirtualBox - full native speed, no extra VM-exits.\n"
+        "  - This VM is detectable by Pafish / Al-Khaser / VMAware.\n"
+        "\n"
+        "Toggling writes VBoxInternal/HM/OhbStealth; applies on next power-on."));
+    QLabel *pStealthDesc = new QLabel(QString::fromUtf8(
+        "<span style='color:#666;'>Master switch for the OpenHuizeBox fork patches. "
+        "Off &#x2192; stock speed, detectable. "
+        "On &#x2192; full stealth stack, slight VM-exit overhead. "
+        "Change takes effect on next power-on.</span>"), pBox);
+    pStealthDesc->setWordWrap(true);
+    pStealthDesc->setContentsMargins(20, 0, 0, 6);
+
+    /* Seed checkbox from current extradata. */
+    {
+        CMachine m = machineProvider();
+        if (!m.isNull())
+        {
+            QString strVal = m.GetExtraData(QString::fromUtf8("VBoxInternal/HM/OhbStealth"));
+            pStealthCb->setChecked(strVal == QString::fromUtf8("1"));
+        }
+    }
+
+    QObject::connect(pStealthCb, &QCheckBox::toggled, pBox,
+        [machineProvider](bool fChecked)
+        {
+            CMachine m = machineProvider();
+            if (!m.isNull())
+                m.SetExtraData(QString::fromUtf8("VBoxInternal/HM/OhbStealth"),
+                               QString::fromUtf8(fChecked ? "1" : "0"));
+        });
+
+    pLay->addWidget(pStealthCb);
+    pLay->addWidget(pStealthDesc);
+
+    /* Visual separator between the stealth master and the profile picker. */
+    QFrame *pSep = new QFrame(pBox);
+    pSep->setFrameShape(QFrame::HLine);
+    pSep->setFrameShadow(QFrame::Sunken);
+    pLay->addWidget(pSep);
 
     QComboBox *pCombo = new QComboBox(pBox);
     const QString strAppDir = QCoreApplication::applicationDirPath();
