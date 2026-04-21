@@ -454,6 +454,13 @@ typedef struct HM
     /** VM needs workaround for missing TLB flush in OS/2, see ticketref:20625.
      * @note Currently only heeded by AMD-V.  */
     bool                        fMissingOS2TlbFlushWorkaround;
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /** OpenHuizeBox: hide descriptor-table accesses via VT-x secondary
+     *  control bit 2 (VMX_PROC_CTLS2_DESC_TABLE_EXIT). Seeded from CFGM
+     *  key "HM/OhbHideDescTables" at HMR3Init. See
+     *  src/VBox/VMM/VMMR0/target-x86/OhbVmxStealthR0.{cpp,h}. */
+    bool                        fOhbHideDescTables;
+#endif
     /** @} */
 
     /** @name Processed into HMR0PERVCPU::fWorldSwitcher by ring-0 on VM init.

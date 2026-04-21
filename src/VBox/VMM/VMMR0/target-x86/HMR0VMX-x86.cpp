@@ -2676,6 +2676,29 @@ static int hmR0VmxSetupVmcsProcCtls2(PVMCPUCC pVCpu, PVMXVMCSINFO pVmcsInfo)
     if (pVM->hmr0.s.vmx.fUnrestrictedGuest)
         fVal |= VMX_PROC_CTLS2_UNRESTRICTED_GUEST;
 
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /*
+     * OpenHuizeBox: descriptor-table exiting (bit 2 of secondary controls).
+     *
+     * When enabled, SIDT / SGDT / LGDT / LIDT produce VM-exit reason 46
+     * and SLDT / STR / LLDT / LTR produce reason 47. Our custom handlers
+     * (OhbVmxStealthR0.cpp) delegate to IEM so the instructions emulate
+     * against a spoofed CPUM state, closing the classic Red Pill
+     * detection used by Pafish / Al-Khaser / VMAware.
+     *
+     * Gated on a per-VM flag (pVM->hm.s.fOhbHideDescTables) seeded from
+     * CFGM "HM/OhbHideDescTables" at HMR3 init. If the CPU doesn't
+     * expose the control, we cleanly fall back to stock behaviour.
+     */
+    if (   pVM->hm.s.fOhbHideDescTables
+        && (g_HmMsrs.u.vmx.ProcCtls2.n.allowed1 & VMX_PROC_CTLS2_DESC_TABLE_EXIT))
+    {
+        fVal |= VMX_PROC_CTLS2_DESC_TABLE_EXIT;
+        LogRel(("OHB/VMX: descriptor-table exiting ENABLED (vcpu=%u) — SIDT/SGDT/SLDT/STR will trap\n",
+                pVCpu->idCpu));
+    }
+#endif
+
 #if 0
     if (pVM->hm.s.fVirtApicRegs)
     {

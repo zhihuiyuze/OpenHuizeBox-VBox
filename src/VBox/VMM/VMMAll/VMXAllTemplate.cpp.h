@@ -653,8 +653,13 @@ static const struct CLANG11NOTHROWWEIRDNESS { PFNVMXEXITHANDLER pfn; } g_aVMExit
     /* 43  VMX_EXIT_TPR_BELOW_THRESHOLD     */  { vmxHCExitTprBelowThreshold },
     /* 44  VMX_EXIT_APIC_ACCESS             */  { vmxHCExitApicAccess },
     /* 45  VMX_EXIT_VIRTUALIZED_EOI         */  { vmxHCExitErrUnexpected },
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /* 46  VMX_EXIT_GDTR_IDTR_ACCESS        */  { vmxHCExitOhbGdtrIdtrAccess },
+    /* 47  VMX_EXIT_LDTR_TR_ACCESS          */  { vmxHCExitOhbLdtrTrAccess },
+#else
     /* 46  VMX_EXIT_GDTR_IDTR_ACCESS        */  { vmxHCExitErrUnexpected },
     /* 47  VMX_EXIT_LDTR_TR_ACCESS          */  { vmxHCExitErrUnexpected },
+#endif
     /* 48  VMX_EXIT_EPT_VIOLATION           */  { vmxHCExitEptViolation },
     /* 49  VMX_EXIT_EPT_MISCONFIG           */  { vmxHCExitEptMisconfig },
 #ifdef VBOX_WITH_NESTED_HWVIRT_VMX_EPT
@@ -8461,6 +8466,64 @@ HMVMX_EXIT_NSRC_DECL vmxHCExitErrUnexpected(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTr
     AssertMsgFailed(("Unexpected VM-exit %u\n", pVmxTransient->uExitReason));
     HMVMX_UNEXPECTED_EXIT_RET(pVCpu, pVmxTransient->uExitReason);
 }
+
+
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+/**
+ * OpenHuizeBox: VM-exit handler for VMX_EXIT_GDTR_IDTR_ACCESS (reason 46).
+ *
+ * Covers SGDT / SIDT / LGDT / LIDT. Delegates to IEM which emulates the
+ * instruction against the guest CPUM state. The guest CPUM state's
+ * IDTR/GDTR cache is what the guest OS itself previously loaded, so
+ * SIDT/SGDT return a guest-OS-controlled address — removing the
+ * static VBox-typical leak that Red Pill detections fingerprint.
+ */
+HMVMX_EXIT_DECL vmxHCExitOhbGdtrIdtrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTransient)
+{
+    HMVMX_VALIDATE_EXIT_HANDLER_PARAMS(pVCpu, pVmxTransient);
+
+    int rc = vmxHCImportGuestStateEx(pVCpu, pVmxTransient->pVmcsInfo, CPUMCTX_EXTRN_ALL);
+    AssertRCReturn(rc, rc);
+
+    Log4Func(("OHB/VMX: GDTR/IDTR exit — %s @ rip=%RX64 qual=%#RX64\n",
+              ohbVmxDescribeGdtrIdtrExit(pVmxTransient->uExitQual),
+              pVCpu->cpum.GstCtx.rip, pVmxTransient->uExitQual));
+
+    VBOXSTRICTRC rcStrict = IEMExecOne(pVCpu);
+    if (rcStrict == VINF_IEM_RAISED_XCPT)
+    {
+        ASMAtomicUoOrU64(&pVCpu->hm.s.fCtxChanged, HM_CHANGED_RAISED_XCPT_MASK);
+        rcStrict = VINF_SUCCESS;
+    }
+    return rcStrict;
+}
+
+
+/**
+ * OpenHuizeBox: VM-exit handler for VMX_EXIT_LDTR_TR_ACCESS (reason 47).
+ *
+ * Covers SLDT / STR / LLDT / LTR.
+ */
+HMVMX_EXIT_DECL vmxHCExitOhbLdtrTrAccess(PVMCPUCC pVCpu, PVMXTRANSIENT pVmxTransient)
+{
+    HMVMX_VALIDATE_EXIT_HANDLER_PARAMS(pVCpu, pVmxTransient);
+
+    int rc = vmxHCImportGuestStateEx(pVCpu, pVmxTransient->pVmcsInfo, CPUMCTX_EXTRN_ALL);
+    AssertRCReturn(rc, rc);
+
+    Log4Func(("OHB/VMX: LDTR/TR exit — %s @ rip=%RX64 qual=%#RX64\n",
+              ohbVmxDescribeLdtrTrExit(pVmxTransient->uExitQual),
+              pVCpu->cpum.GstCtx.rip, pVmxTransient->uExitQual));
+
+    VBOXSTRICTRC rcStrict = IEMExecOne(pVCpu);
+    if (rcStrict == VINF_IEM_RAISED_XCPT)
+    {
+        ASMAtomicUoOrU64(&pVCpu->hm.s.fCtxChanged, HM_CHANGED_RAISED_XCPT_MASK);
+        rcStrict = VINF_SUCCESS;
+    }
+    return rcStrict;
+}
+#endif /* VBOX_WITH_OHB_VMX_STEALTH */
 
 
 /**

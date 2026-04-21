@@ -1024,6 +1024,7 @@ if defined(VBOX_WITH_R0_MODULES) && !defined(VBOX_ONLY_BUILD)
   	VMMR0/target-x86/HMR0-x86.cpp \
   	VMMR0/target-x86/HMR0VMX-x86.cpp \
   	VMMR0/target-x86/HMR0SVM-x86.cpp \
+  	VMMR0/target-x86/OhbVmxStealthR0.cpp \
   	VMMR0/IEMR0.cpp \
   	VMMR0/IOMR0.cpp \
   	VMMR0/IOMR0IoPort.cpp \

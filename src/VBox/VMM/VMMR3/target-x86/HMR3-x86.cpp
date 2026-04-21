@@ -456,6 +456,24 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
     rc = CFGMR3QueryU32Def(pCfgHm, "MaxResumeLoops", &pVM->hm.s.cMaxResumeLoopsCfg, 0 /* set by R0 later */);
     AssertLogRelRCReturn(rc, rc);
 
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /** @cfgm{/HM/OhbHideDescTables, bool, false}
+     * OpenHuizeBox: enable VT-x descriptor-table exiting (bit 2 of secondary
+     * controls) so SIDT/SGDT/SLDT/STR trap and are emulated via IEM against
+     * the guest CPUM state — defeats classic Red Pill detections
+     * (Pafish/Al-Khaser/VMAware). Off by default; the OHB profile layer
+     * enables it for stealth-enabled VMs.  Only takes effect if the CPU
+     * exposes the secondary control (Penryn+ for Intel).  */
+    {
+        bool fOhbHideDescTables = false;
+        rc = CFGMR3QueryBoolDef(pCfgHm, "OhbHideDescTables", &fOhbHideDescTables, false);
+        AssertLogRelRCReturn(rc, rc);
+        pVM->hm.s.fOhbHideDescTables = fOhbHideDescTables;
+        if (fOhbHideDescTables)
+            LogRel(("OHB/HM: descriptor-table exiting flag set from CFGM (applies at VMCS setup)\n"));
+    }
+#endif
+
     /** @cfgm{/HM/UseVmxPreemptTimer, bool}
      * Whether to make use of the VMX-preemption timer feature of the CPU if it's
      * available. */
