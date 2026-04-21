@@ -263,6 +263,27 @@ typedef struct DMIOEMSPECIFIC
 } *PDMIOEMSPECIFIC;
 AssertCompileSize(DMIOEMSPECIFIC, 0x8);
 
+/** OpenHuizeBox: DMI Cache Information (Type 7).
+ * Required by Win32_CacheMemory WMI class — malware detectors flag
+ * the class returning zero entries as a VM tell.  Populated per
+ * profile via CFGM keys DmiL1CacheSize / DmiL2CacheSize /
+ * DmiL3CacheSize (in KB). */
+typedef struct DMICACHEINFO
+{
+    DMIHDR          header;
+    uint8_t         u8SocketDesignation;
+    uint16_t        u16CacheConfig;       /* Level, write policy, cache mode, socket type */
+    uint16_t        u16MaxCacheSize;      /* In 64KB granularity (bit15=1) or 1KB (bit15=0) */
+    uint16_t        u16InstalledSize;
+    uint16_t        u16SupportedSRAM;
+    uint16_t        u16CurrentSRAM;
+    uint8_t         u8CacheSpeed;         /* ns; 0 = unknown */
+    uint8_t         u8ErrorCorrection;    /* 3=None, 4=Parity, 5=SingleBitECC, 6=MultiBitECC */
+    uint8_t         u8SystemCacheType;    /* 3=Instruction, 4=Data, 5=Unified */
+    uint8_t         u8Associativity;      /* 3=DirectMapped, 5=4-way, 7=8-way, 8=16-way */
+} *PDMICACHEINFO;
+AssertCompileSize(DMICACHEINFO, 19);
+
 /** Physical memory array (Type 16) */
 typedef struct DMIRAMARRAY
 {
@@ -967,12 +988,77 @@ int FwCommonPlantDMITable(PPDMDEVINS pDevIns, uint8_t *pTable, unsigned cbMax, P
         pMemDev->u8MemoryType            = 0x03; /* DRAM */
         pMemDev->u16TypeDetail           = 0;    /* Nothing special */
         pMemDev->u16Speed                = 1600; /* Unknown, shall be speed in MHz */
-        DMI_READ_CFG_STR(pMemDev->u8Manufacturer, DmiSystemVendor);
-        DMI_READ_CFG_STR_DEF(pMemDev->u8SerialNumber, " ", "00000000");
-        DMI_READ_CFG_STR_DEF(pMemDev->u8AssetTag, " ", "00000000");
-        DMI_READ_CFG_STR_DEF(pMemDev->u8PartNumber, " ", "00000000");
+        /* OpenHuizeBox: expose proper CFGM keys so the profile can write realistic
+         * DIMM vendor/serial/part-number/asset-tag. Pafish / VMAware / Al-Khaser
+         * read these via Win32_PhysicalMemory and flag empty or "00000000" as a
+         * VM tell. Defaults are a plausible real DDR4-3200 Micron DIMM. */
+        DMI_READ_CFG_STR_DEF(pMemDev->u8Manufacturer, "DmiMemDevManufacturer", "Micron Technology");
+        DMI_READ_CFG_STR_DEF(pMemDev->u8SerialNumber, "DmiMemDevSerial",      "5A04E312");
+        DMI_READ_CFG_STR_DEF(pMemDev->u8AssetTag,     "DmiMemDevAssetTag",    "9876543210");
+        DMI_READ_CFG_STR_DEF(pMemDev->u8PartNumber,   "DmiMemDevPartNumber",  "18ASF2G72PZ-3G2E1");
         pMemDev->u8Attributes            = 0; /* Unknown */
         DMI_TERM_STRUCT;
+
+        /***************************************
+         * OpenHuizeBox: DMI Cache Information (Type 7)
+         * Ship L1 / L2 / L3 entries so Win32_CacheMemory returns a
+         * non-empty set (empty set is a VM tell — see pafish
+         * Check-CacheTopology and Al-Khaser CacheTopology rule).
+         ***************************************/
+        for (uint32_t iCacheLvl = 1; iCacheLvl <= 3; ++iCacheLvl)
+        {
+            PDMICACHEINFO pCache = (PDMICACHEINFO)pszStr;
+            DMI_CHECK_SIZE(sizeof(*pCache));
+            DMI_START_STRUCT(pCache);
+            pCache->header.u8Type      = 7;                                 /* Cache Information */
+            pCache->header.u8Length    = sizeof(*pCache);
+            pCache->header.u16Handle   = (uint16_t)(0x0020 + iCacheLvl);    /* 0x0021..0x0023 */
+
+            char szSocket[16];
+            RTStrPrintf(szSocket, sizeof(szSocket), "L%u Cache", iCacheLvl);
+            DMI_READ_CFG_STR_DEF(pCache->u8SocketDesignation, "DmiCacheSocketDesignation", szSocket);
+
+            /* Cache configuration word:
+             *   bits 2:0  = cache level - 1     (0 = L1, 1 = L2, 2 = L3)
+             *   bit 3     = cache socketed      (0)
+             *   bits 7:5  = cache location      (000 = internal)
+             *   bit 8     = cache enabled       (1)
+             *   bits 10:9 = operational mode    (1 = Write Back)
+             */
+            pCache->u16CacheConfig     = (uint16_t)((iCacheLvl - 1)        /* level */
+                                                    | (0  << 3)           /* not socketed */
+                                                    | (0  << 5)           /* internal */
+                                                    | (1  << 8)           /* enabled */
+                                                    | (1  << 9)           /* write-back */
+                                                    );
+
+            /* Max & Installed sizes. Encoded in 1KB granularity; bit15=0.
+             * Defaults reflect a modern Intel Core i5/i7: L1=64KB/core,
+             * L2=256KB/core, L3=8MB shared. Overridable per profile. */
+            uint32_t u32DefSizeKB;
+            const char *pszKeyMax;
+            const char *pszKeyInstalled;
+            if (iCacheLvl == 1) { u32DefSizeKB =    64; pszKeyMax = "DmiL1MaxSize";      pszKeyInstalled = "DmiL1InstalledSize"; }
+            else if (iCacheLvl == 2) { u32DefSizeKB =   256; pszKeyMax = "DmiL2MaxSize"; pszKeyInstalled = "DmiL2InstalledSize"; }
+            else                { u32DefSizeKB =  8192; pszKeyMax = "DmiL3MaxSize";      pszKeyInstalled = "DmiL3InstalledSize"; }
+            int32_t iTmpMax = (int32_t)u32DefSizeKB;
+            pHlp->pfnCFGMQueryS32Def(pCfg, pszKeyMax, &iTmpMax, (int32_t)u32DefSizeKB);
+            int32_t iTmpInstalled = iTmpMax;
+            pHlp->pfnCFGMQueryS32Def(pCfg, pszKeyInstalled, &iTmpInstalled, iTmpMax);
+            pCache->u16MaxCacheSize    = (uint16_t)(iTmpMax       & 0x7FFF);   /* 1KB granularity */
+            pCache->u16InstalledSize   = (uint16_t)(iTmpInstalled & 0x7FFF);
+
+            pCache->u16SupportedSRAM   = (1U << 1);   /* Unknown */
+            pCache->u16CurrentSRAM     = (1U << 1);   /* Unknown */
+            pCache->u8CacheSpeed       = 0x01;        /* 1 ns */
+            pCache->u8ErrorCorrection  = (iCacheLvl == 3) ? 0x06 : 0x05;  /* L3 MultiBitECC; L1/L2 SingleBitECC */
+            pCache->u8SystemCacheType  = (iCacheLvl == 1) ? 0x04          /* L1: Data (close enough; most detectors accept) */
+                                                           : 0x05;        /* L2/L3: Unified */
+            pCache->u8Associativity    = (iCacheLvl == 1) ? 0x07          /* L1: 8-way */
+                                       : (iCacheLvl == 2) ? 0x07          /* L2: 8-way */
+                                                           : 0x0A;        /* L3: 16-way */
+            DMI_TERM_STRUCT;
+        }
 
         /*****************************
          * DMI OEM strings (Type 11) *
