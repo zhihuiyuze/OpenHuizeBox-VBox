@@ -49,6 +49,7 @@
 *********************************************************************************************************************************/
 #define LOG_GROUP LOG_GROUP_DEV_AHCI
 #include <VBox/vmm/pdmdev.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #include <VBox/vmm/pdmstorageifs.h>
 #include <VBox/vmm/pdmqueue.h>
 #include <VBox/vmm/pdmthread.h>
@@ -5883,6 +5884,8 @@ static DECLCALLBACK(int) ahciR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     if (RT_FAILURE(rc))
         return rc;
+    /* OpenHuizeBox: honour per-VM PCI identity override — SATA/SSD controller claims Samsung / Intel / etc. */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
 
 #ifdef VBOX_WITH_MSI_DEVICES
     PDMMSIREG MsiReg;

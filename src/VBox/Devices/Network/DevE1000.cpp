@@ -51,6 +51,7 @@
 #include <VBox/vmm/pdmdev.h>
 #include <VBox/vmm/pdmnetifs.h>
 #include <VBox/vmm/pdmnetinline.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #include <VBox/param.h>
 #include <VBox/VBoxPktDmp.h>
 #include "VBoxDD.h"
@@ -9328,6 +9329,8 @@ static DECLCALLBACK(int) e1kR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
         e1kR3ConfigurePciDev(pDevIns->apPciDevs[0], pThis->eChip);
         rc = PDMDevHlpPCIRegister(pDevIns, pDevIns->apPciDevs[0]);
         AssertRCReturn(rc, rc);
+        /* OpenHuizeBox: honour per-VM PCI identity override (Intel 8086:100E default -> real NIC VID/DID). */
+        ohbPciOverrideFromExtraData(pDevIns, pDevIns->apPciDevs[0]);
 
 #ifdef E1K_WITH_MSI
         PDMMSIREG MsiReg;
@@ -9347,6 +9350,8 @@ static DECLCALLBACK(int) e1kR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
         e1eR3ConfigurePciDev82583(pDevIns->apPciDevs[0], &MsiReg, pThis->eChip);
         rc = PDMDevHlpPCIRegister(pDevIns, pDevIns->apPciDevs[0]);
         AssertRCReturn(rc, rc);
+        /* OpenHuizeBox: honour per-VM PCI identity override (Intel 8086:100E default -> real NIC VID/DID). */
+        ohbPciOverrideFromExtraData(pDevIns, pDevIns->apPciDevs[0]);
 
         rc = PDMDevHlpPCIRegisterMsi(pDevIns, &MsiReg);
         if (RT_FAILURE(rc))

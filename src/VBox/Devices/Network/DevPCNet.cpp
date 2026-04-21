@@ -67,6 +67,7 @@
 #define LOG_GROUP LOG_GROUP_DEV_PCNET
 #include <VBox/vmm/pdmdev.h>
 #include <VBox/vmm/pdmnetifs.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #include <VBox/vmm/pgm.h>
 #include <VBox/version.h>
 #include <iprt/asm.h>
@@ -5132,6 +5133,8 @@ static DECLCALLBACK(int) pcnetR3Construct(PPDMDEVINS pDevIns, int iInstance, PCF
     {
         rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
         AssertRCReturn(rc, rc);
+        /* OpenHuizeBox: honour per-VM PCI identity override — PCnet claims real NIC. */
+        ohbPciOverrideFromExtraData(pDevIns, pPciDev);
 
         /* Region #0: I/O ports - two handlers: */
         rc = PDMDevHlpIoPortCreate(pDevIns, 0x10 /*cPorts*/, pPciDev, 0 /*iPciRegion*/,

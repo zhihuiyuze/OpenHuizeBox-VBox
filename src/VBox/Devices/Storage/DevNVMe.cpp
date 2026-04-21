@@ -37,6 +37,7 @@
 #include <VBox/pci.h>
 #include <VBox/msi.h>
 #include <VBox/vmm/pdm.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #include <VBox/vmm/pdmstorageifs.h>
 #include <VBox/AssertGuest.h>
 #include <VBox/err.h>
@@ -7334,6 +7335,8 @@ static DECLCALLBACK(int) nvmeR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     if (RT_FAILURE(rc))
         return rc;
+    /* OpenHuizeBox: honour per-VM PCI identity override — NVMe claims Samsung 980/WD SN770/etc. */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
 
 #ifdef VBOX_WITH_MSI_DEVICES
     PDMMSIREG MsiReg;

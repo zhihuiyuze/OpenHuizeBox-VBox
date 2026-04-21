@@ -287,6 +287,7 @@
 #include <VBox/msi.h>
 #include <VBox/vmm/pdm.h>
 #include <VBox/err.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #include <VBox/log.h>
 #include <iprt/assert.h>
 #ifdef IN_RING3
@@ -8090,6 +8091,8 @@ static DECLCALLBACK(int) xhciR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
      */
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     AssertRCReturn(rc, rc);
+    /* OpenHuizeBox: honour per-VM PCI identity override. */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
 
 #ifdef VBOX_WITH_MSI_DEVICES
     PDMMSIREG MsiReg;
