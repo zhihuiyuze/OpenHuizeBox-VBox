@@ -36,6 +36,9 @@
 #include <VBox/vmm/nem.h>
 #include <VBox/vmm/ssm.h>
 #include "CPUMInternal.h"
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+# include "HMInternal.h" /* For pVM->hm.s.fOhbStealthMaster (OHB master stealth switch). */
+#endif
 #include <VBox/vmm/vmcc.h>
 #include <VBox/sup.h>
 
@@ -1015,6 +1018,15 @@ typedef struct CPUMCPUIDCONFIG
     bool            fForceVme;
     bool            fNestedHWVirt;
     bool            fSpecCtrl;
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /** OpenHuizeBox: advertise UMIP (User-Mode Instruction Prevention) in
+     *  CPUID leaf 7 sub 0 ECX bit 2.  When the guest OS (Windows 10+) sees
+     *  this, it sets CR4.UMIP, which makes SIDT/SGDT/SLDT/STR raise #GP
+     *  from user-mode.  Kills the user-mode Red Pill vector used by
+     *  Pafish / Al-Khaser.  Only applied when the host CPU also supports
+     *  UMIP (we do not fake it). */
+    bool            fOhbExposeUmip;
+#endif
 
     CPUMISAEXTCFG   enmCmpXchg16b;
     CPUMISAEXTCFG   enmMonitor;
@@ -2894,6 +2906,25 @@ static int cpumR3CpuIdReadConfig(PVM pVM, PCPUMCPUIDCONFIG pConfig, PCFGMNODE pC
     rc = CFGMR3QueryBoolDef(pCpumCfg, "SpecCtrl", &pConfig->fSpecCtrl, false);
     AssertRCReturn(rc, rc);
 
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /** @cfgm{/CPUM/OhbExposeUmip, bool, (HM/OhbStealth ? true : false)}
+     * OpenHuizeBox: expose UMIP (User-Mode Instruction Prevention) support
+     * in CPUID leaf 7 subleaf 0 ECX bit 2.  Windows 10+ will then set
+     * CR4.UMIP automatically, making SIDT/SGDT/SLDT/STR raise #GP when
+     * executed from CPL>0.  Defeats the user-mode Red Pill descriptor-
+     * table-base leak used by Pafish, Al-Khaser, InviZzzible, etc.
+     * Complementary to the VT-x descriptor-table-exiting control (which
+     * covers ring-0).  UMIP is only actually advertised if the host CPU
+     * supports it (we do not fake CR4.UMIP enforcement).
+     *
+     * Default follows the HM/OhbStealth master switch. */
+    {
+        bool const fOhbStealthDefault = pVM->hm.s.fOhbStealthMaster;
+        rc = CFGMR3QueryBoolDef(pCpumCfg, "OhbExposeUmip", &pConfig->fOhbExposeUmip, fOhbStealthDefault);
+        AssertRCReturn(rc, rc);
+    }
+#endif
+
 #ifdef RT_ARCH_AMD64 /** @todo next VT-x/AMD-V on non-AMD64 hosts */
     bool fQueryNestedHwvirt = false
 #ifdef VBOX_WITH_NESTED_HWVIRT_SVM
@@ -3580,6 +3611,52 @@ int cpumR3InitCpuIdAndMsrs(PVM pVM, PCSUPHWVIRTMSRS pHostMsrs)
             cpumR3CpuIdLimitIntelFamModStep(pCpum, &Config);
         }
     }
+
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /*
+     * OpenHuizeBox: post-sanitize UMIP injection into CPUID leaf 7 sub 0 ECX bit 2.
+     *
+     * The sanitize pass strips bits it doesn't know about, so we patch in UMIP
+     * *after* it has finished.  Only advertise UMIP if the host actually
+     * supports it (read host CPUID leaf 7 ECX bit 2); otherwise the guest OS
+     * would try to set CR4.UMIP and #GP on real hardware that can't enforce it.
+     */
+    if (RT_SUCCESS(rc) && Config.fOhbExposeUmip)
+    {
+# if defined(RT_ARCH_AMD64) || defined(RT_ARCH_X86)
+        /* Check leaf 7 is actually supported on the host (max basic leaf >= 7). */
+        uint32_t uMaxBasicLeaf = 0;
+        uint32_t uDummy0 = 0, uDummy1 = 0, uDummy2 = 0;
+        ASMCpuId_Idx_ECX(0, 0, &uMaxBasicLeaf, &uDummy0, &uDummy1, &uDummy2);
+
+        bool fHostUmip = false;
+        if (uMaxBasicLeaf >= 7)
+        {
+            uint32_t uHostEax = 0, uHostEbx = 0, uHostEcx = 0, uHostEdx = 0;
+            ASMCpuId_Idx_ECX(7, 0, &uHostEax, &uHostEbx, &uHostEcx, &uHostEdx);
+            fHostUmip = RT_BOOL(uHostEcx & X86_CPUID_STEXT_FEATURE_ECX_UMIP);
+        }
+
+        if (fHostUmip)
+        {
+            PCPUMCPUIDLEAF pUmipLeaf = cpumR3CpuIdGetExactLeaf(pCpum, UINT32_C(0x00000007), 0);
+            if (pUmipLeaf)
+            {
+                uint32_t const uOldEcx = pUmipLeaf->uEcx;
+                pUmipLeaf->uEcx |= X86_CPUID_STEXT_FEATURE_ECX_UMIP;
+                LogRel(("CPUM: OHB: advertising UMIP to guest (leaf 7.0 ECX %#x -> %#x)\n",
+                        uOldEcx, pUmipLeaf->uEcx));
+            }
+            else
+                LogRel(("CPUM: OHB: cannot advertise UMIP - leaf 0x00000007 sub 0 missing from guest CPUID\n"));
+        }
+        else
+            LogRel(("CPUM: OHB: host CPU does not support UMIP - not advertising to guest\n"));
+# else
+        LogRel(("CPUM: OHB: UMIP exposure requested but host is not x86/AMD64 - skipping\n"));
+# endif
+    }
+#endif /* VBOX_WITH_OHB_VMX_STEALTH */
 
     /*
      * Move the CPUID array over to the static VM structure allocation
