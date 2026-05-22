@@ -283,11 +283,42 @@ void UIMachineSettingsOhbIdentity::loadToCacheFrom(QVariant &data)
                 setProperty("ohbWizardAutoApplyProfile", init.m_strProfileLast);
             writeExtra(m_machine, kWizardApplied, QString("1"));
         }
-        init.m_fHideDescTables   = (readExtra(m_machine, kHideDescTables)  == QLatin1String("1"));
-        init.m_u64FakeIdtrBase   = readExtra(m_machine, kFakeIdtrBase).toULongLong(0, 0);
-        init.m_u16FakeIdtrLimit  = static_cast<quint16>(readExtra(m_machine, kFakeIdtrLimit).toUInt(0, 0));
-        init.m_u64FakeGdtrBase   = readExtra(m_machine, kFakeGdtrBase).toULongLong(0, 0);
-        init.m_u16FakeGdtrLimit  = static_cast<quint16>(readExtra(m_machine, kFakeGdtrLimit).toUInt(0, 0));
+        /* HideDescTables: cascade from master when key absent, matching the
+         * default in HMR3-x86.cpp's CFGM block. */
+        {
+            const QString sHide = readExtra(m_machine, kHideDescTables);
+            init.m_fHideDescTables = sHide.isEmpty() ? init.m_fStealthMaster
+                                                    : (sHide == QLatin1String("1"));
+        }
+        /* IdtrBase/GdtrBase/Limits: when stealth is on and the extradata key
+         * is absent, substitute the C-side defaults from HMR3-x86.cpp so the
+         * subsequent saveData() round-trip preserves a working VMX descriptor-
+         * table-spoof config. Writing 0 back would override the C default and
+         * silently disable SIDT/SGDT spoofing. */
+        {
+            const QString sIdtrBase = readExtra(m_machine, kFakeIdtrBase);
+            init.m_u64FakeIdtrBase = sIdtrBase.isEmpty() && init.m_fStealthMaster
+                                     ? Q_UINT64_C(0xFFFFF80000000080)
+                                     : sIdtrBase.toULongLong(0, 0);
+        }
+        {
+            const QString sIdtrLimit = readExtra(m_machine, kFakeIdtrLimit);
+            init.m_u16FakeIdtrLimit = sIdtrLimit.isEmpty() && init.m_fStealthMaster
+                                      ? quint16(0xFFF)
+                                      : static_cast<quint16>(sIdtrLimit.toUInt(0, 0));
+        }
+        {
+            const QString sGdtrBase = readExtra(m_machine, kFakeGdtrBase);
+            init.m_u64FakeGdtrBase = sGdtrBase.isEmpty() && init.m_fStealthMaster
+                                     ? Q_UINT64_C(0xFFFFF80000002000)
+                                     : sGdtrBase.toULongLong(0, 0);
+        }
+        {
+            const QString sGdtrLimit = readExtra(m_machine, kFakeGdtrLimit);
+            init.m_u16FakeGdtrLimit = sGdtrLimit.isEmpty() && init.m_fStealthMaster
+                                      ? quint16(0x7F)
+                                      : static_cast<quint16>(sGdtrLimit.toUInt(0, 0));
+        }
         init.m_i64TscOffsetBias  = readExtra(m_machine, kTscOffsetBias).toLongLong(0, 0);
 
         init.m_strSysVendor      = readExtra(m_machine, kDmiSysVendor);
