@@ -32,7 +32,6 @@
 
 /* GUI includes: */
 #include "QITabWidget.h"
-#include "UIOhbHelpers.h"
 #include "UIErrorString.h"
 #include "UIGlobalSession.h"
 #include "UIMachineSettingsNetwork.h"
@@ -461,15 +460,7 @@ void UIMachineSettingsNetwork::prepareWidgets()
 
             pLayoutMain->addWidget(m_pTabWidget);
 
-            /* OpenHuizeBox profile-picker - MAC OUI + NIC model identity */
-            {
-                QGroupBox *pOhbBox = UIOhb::buildProfileBox(this,
-                    [this]() -> CMachine { return m_machine; },
-                    QString::fromUtf8("Network adapter #1 MAC OUI prefix (from profile mac_oui_pool) "
-                                      "+ NIC model defaults"));
-                if (pOhbBox)
-                    pLayoutMain->addWidget(pOhbBox);
-            }
+            /* OpenHuizeBox identity controls moved to dedicated tab. */
         }
     }
 }

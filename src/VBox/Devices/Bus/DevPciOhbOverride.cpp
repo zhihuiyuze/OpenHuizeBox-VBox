@@ -67,12 +67,20 @@ DECLHIDDEN(int) ohbPciOverrideFromExtraData(PPDMDEVINS pDevIns, PPDMPCIDEV pPciD
     PCFGMNODE pCfg = pDevIns->pCfg;
     AssertPtrReturn(pCfg, VERR_INVALID_PARAMETER);
 
+    /* Use the PDM device-helper indirection (pHlpR3->pfnCFGMQueryU32) instead
+     * of calling CFGMR3QueryU32 directly. Reason: VBoxDD.dll does not link
+     * against VBoxVMM's import library, so the direct call results in an
+     * unresolved __imp_CFGMR3QueryU32 link error. Every other device R3 ctor
+     * in this tree uses the helper indirection for exactly this reason. */
+    PCPDMDEVHLPR3 pHlp = pDevIns->pHlpR3;
+    AssertPtrReturn(pHlp, VERR_INVALID_PARAMETER);
+
     /* Query + apply each field. QueryU32 returns VERR_CFGM_VALUE_NOT_FOUND
      * when absent; we treat that as "user did not override, leave stock". */
     uint32_t u32;
     int rc;
 
-    rc = CFGMR3QueryU32(pCfg, "PciVendorId", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciVendorId", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT16_MAX)
     {
         PDMPciDevSetVendorId(pPciDev, (uint16_t)u32);
@@ -80,7 +88,7 @@ DECLHIDDEN(int) ohbPciOverrideFromExtraData(PPDMDEVINS pDevIns, PPDMPCIDEV pPciD
                 pDevIns->pReg->szName, pDevIns->iInstance, (uint16_t)u32));
     }
 
-    rc = CFGMR3QueryU32(pCfg, "PciDeviceId", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciDeviceId", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT16_MAX)
     {
         PDMPciDevSetDeviceId(pPciDev, (uint16_t)u32);
@@ -88,23 +96,23 @@ DECLHIDDEN(int) ohbPciOverrideFromExtraData(PPDMDEVINS pDevIns, PPDMPCIDEV pPciD
                 pDevIns->pReg->szName, pDevIns->iInstance, (uint16_t)u32));
     }
 
-    rc = CFGMR3QueryU32(pCfg, "PciSubsysVendorId", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciSubsysVendorId", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT16_MAX)
         PDMPciDevSetSubSystemVendorId(pPciDev, (uint16_t)u32);
 
-    rc = CFGMR3QueryU32(pCfg, "PciSubsysDeviceId", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciSubsysDeviceId", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT16_MAX)
         PDMPciDevSetSubSystemId(pPciDev, (uint16_t)u32);
 
-    rc = CFGMR3QueryU32(pCfg, "PciRevisionId", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciRevisionId", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT8_MAX)
         PDMPciDevSetRevisionId(pPciDev, (uint8_t)u32);
 
-    rc = CFGMR3QueryU32(pCfg, "PciClassCode", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciClassCode", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT8_MAX)
         PDMPciDevSetClassBase(pPciDev, (uint8_t)u32);
 
-    rc = CFGMR3QueryU32(pCfg, "PciSubClassCode", &u32);
+    rc = pHlp->pfnCFGMQueryU32(pCfg, "PciSubClassCode", &u32);
     if (RT_SUCCESS(rc) && u32 <= UINT8_MAX)
         PDMPciDevSetClassSub(pPciDev, (uint8_t)u32);
 

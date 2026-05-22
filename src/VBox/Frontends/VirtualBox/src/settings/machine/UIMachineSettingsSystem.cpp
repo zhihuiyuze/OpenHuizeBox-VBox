@@ -44,7 +44,6 @@
 /* GUI includes: */
 #include "QITabWidget.h"
 #include "UIAccelerationFeaturesEditor.h"
-#include "UIOhbHelpers.h"
 #include "UIBaseMemoryEditor.h"
 #include "UIBootOrderEditor.h"
 #include "UIChipsetEditor.h"
@@ -806,10 +805,8 @@ void UIMachineSettingsSystem::prepareTabMotherboard()
                 pLayoutMotherboard->addWidget(m_pEditorMotherboardFeatures, 5, 0);
             }
 
-            /* OpenHuizeBox profile-picker - SMBIOS / ACPI / BIOS identity */
-            UIOhb::attachProfileBox(pLayoutMotherboard, 6, m_pTabMotherboard,
-                [this]() -> CMachine { return m_machine; },
-                QString::fromUtf8("SMBIOS tables (System/BIOS/Board/Chassis/CPU/Memory) + ACPI OEM"));
+            /* OpenHuizeBox identity controls now live in the dedicated
+             * "OpenHuizeBox" left-nav tab (UIMachineSettingsOhbIdentity). */
         }
 
         addEditor(m_pTabMotherboard);

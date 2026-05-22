@@ -26,7 +26,7 @@
  */
 
 // OpenHuizeBox: scrub "VBOX" OEM identifiers. See vbox.dsl for rationale.
-DefinitionBlock ("SSDT.aml", "SSDT", 1, "ALASKA", "A M I TPM", 2)
+DefinitionBlock ("SSDT.aml", "SSDT", 1, "ALASKA", "AMI TPM ", 2)
 {
     External(DBG, MethodObj, ,)
 

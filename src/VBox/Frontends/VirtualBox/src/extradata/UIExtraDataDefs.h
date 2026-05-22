@@ -895,6 +895,7 @@ enum MachineSettingsPageType
     MachineSettingsPageType_USB,
     MachineSettingsPageType_SF,
     MachineSettingsPageType_Interface,
+    MachineSettingsPageType_OhbIdentity,   /**< OpenHuizeBox: Realistic Hardware Identity. */
     MachineSettingsPageType_Max
 };
 Q_DECLARE_METATYPE(MachineSettingsPageType);

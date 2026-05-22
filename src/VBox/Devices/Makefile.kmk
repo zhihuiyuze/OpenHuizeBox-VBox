@@ -189,6 +189,7 @@ if !defined(VBOX_ONLY_EXTPACKS) && "$(intersects $(KBUILD_TARGET_ARCH),$(VBOX_SU
  	Input/UsbMouse.cpp \
  	Bus/DevPCI.cpp \
  	Bus/DevPciIch9.cpp \
+ 	Bus/DevPciOhbOverride.cpp \
  	Bus/MsiCommon.cpp \
  	Bus/MsixCommon.cpp \
  	$(if $(VBOX_WITH_IOMMU_AMD),Bus/DevIommuAmd.cpp,) \

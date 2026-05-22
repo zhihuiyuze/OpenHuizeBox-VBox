@@ -2187,6 +2187,7 @@ template<> SHARED_LIBRARY_STUFF QString UIConverter::toInternalString(const Mach
         case MachineSettingsPageType_USB:       strResult = "USB"; break;
         case MachineSettingsPageType_SF:        strResult = "SharedFolders"; break;
         case MachineSettingsPageType_Interface: strResult = "Interface"; break;
+        case MachineSettingsPageType_OhbIdentity: strResult = "OhbIdentity"; break;
         default:
         {
             AssertMsgFailed(("No text for settings page type=%d", machineSettingsPageType));
@@ -2219,6 +2220,8 @@ template<> SHARED_LIBRARY_STUFF MachineSettingsPageType UIConverter::fromInterna
         return MachineSettingsPageType_SF;
     if (strMachineSettingsPageType.compare("Interface", Qt::CaseInsensitive) == 0)
         return MachineSettingsPageType_Interface;
+    if (strMachineSettingsPageType.compare("OhbIdentity", Qt::CaseInsensitive) == 0)
+        return MachineSettingsPageType_OhbIdentity;
     return MachineSettingsPageType_Invalid;
 }
 
@@ -2237,6 +2240,7 @@ template<> SHARED_LIBRARY_STUFF QPixmap UIConverter::toWarningPixmap(const Machi
         case MachineSettingsPageType_USB:       return UIIconPool::pixmap(":/usb_warning_16px.png");
         case MachineSettingsPageType_SF:        return UIIconPool::pixmap(":/sf_warning_16px.png");
         case MachineSettingsPageType_Interface: return UIIconPool::pixmap(":/interface_warning_16px.png");
+        case MachineSettingsPageType_OhbIdentity: return UIIconPool::pixmap(":/interface_warning_16px.png");
         default: AssertMsgFailed(("No pixmap for %d", type)); break;
     }
     return QPixmap();

@@ -60,6 +60,7 @@
 #include "UIMachineSettingsDisplay.h"
 #include "UIMachineSettingsGeneral.h"
 #include "UIMachineSettingsInterface.h"
+#include "UIMachineSettingsOhbIdentity.h"
 #include "UIMachineSettingsNetwork.h"
 #include "UIMachineSettingsSerial.h"
 #include "UIMachineSettingsSF.h"
@@ -376,6 +377,9 @@ void UIAdvancedSettingsDialogMachine::sltRetranslateUI()
 
     /* Interface page: */
     m_pSelector->setItemText(MachineSettingsPageType_Interface, tr("User Interface"));
+
+    /* OpenHuizeBox Identity page: */
+    m_pSelector->setItemText(MachineSettingsPageType_OhbIdentity, tr("OpenHuizeBox"));
 
     /* Polish the selector: */
     m_pSelector->polish();
@@ -732,6 +736,15 @@ void UIAdvancedSettingsDialogMachine::prepare()
                     addItem(":/interface_32px.png", ":/interface_24px.png", ":/interface_16px.png",
                             iPageIndex, "#userInterface", pSettingsPage);
                     addPageHelpKeyword(iPageIndex, "ct_user-interface" /* help keyword */);
+                    break;
+                }
+                /* OpenHuizeBox - Realistic Hardware Identity page: */
+                case MachineSettingsPageType_OhbIdentity:
+                {
+                    pSettingsPage = new UIMachineSettingsOhbIdentity;
+                    addItem(":/interface_32px.png", ":/interface_24px.png", ":/interface_16px.png",
+                            iPageIndex, "#openHuizeBox", pSettingsPage);
+                    addPageHelpKeyword(iPageIndex, "ct_openhuizebox-identity" /* help keyword */);
                     break;
                 }
                 default:
