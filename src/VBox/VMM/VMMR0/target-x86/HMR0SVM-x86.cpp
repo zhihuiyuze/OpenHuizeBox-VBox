@@ -379,6 +379,14 @@ static FNSVMEXITHANDLER hmR0SvmExitXcptGeneric;
 static FNSVMEXITHANDLER hmR0SvmExitSwInt;
 static FNSVMEXITHANDLER hmR0SvmExitTrRead;
 static FNSVMEXITHANDLER hmR0SvmExitTrWrite;
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+/* OpenHuizeBox: SVM (AMD-V) stealth handlers — counterparts to the VMX
+ * descriptor-table-exit handlers in VMXAllTemplate.cpp.h. Enabled when
+ * the master OhbStealth + OhbHideDescTables CFGM keys are set. */
+static FNSVMEXITHANDLER hmR0SvmExitIdtrReadStealth;
+static FNSVMEXITHANDLER hmR0SvmExitGdtrReadStealth;
+static FNSVMEXITHANDLER hmR0SvmExitLdtrReadStealth;
+#endif
 static FNSVMEXITHANDLER hmR0SvmExitBusLock;
 #ifdef VBOX_WITH_NESTED_HWVIRT_SVM
 static FNSVMEXITHANDLER hmR0SvmExitClgi;
@@ -1080,6 +1088,27 @@ VMMR0DECL(int) SVMR0SetupVM(PVMCC pVM)
                                  | SVM_CTRL_INTERCEPT_VMLOAD
                                  | SVM_CTRL_INTERCEPT_CLGI
                                  | SVM_CTRL_INTERCEPT_STGI;
+
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+    /* OpenHuizeBox: when fOhbHideDescTables is enabled, intercept the four
+     * descriptor-table read instructions (SIDT / SGDT / SLDT / STR) so the
+     * exit handlers (hmR0SvmExitSidt/Sgdt/Sldt/Str) can splice in the fake
+     * IDTR/GDTR base values seeded from CFGM HM/OhbFakeIdtrBase etc.
+     *
+     * This is the AMD-V (SVM) counterpart to the VT-x descriptor-table
+     * exiting wired in HMR0VMX-x86.cpp around VMX_PROC_CTLS2_DESC_TABLE_EXIT.
+     * Without this block, Pafish / Al-Khaser SIDT-based detection succeeds
+     * on AMD hosts even when OhbStealth=1. See OhbVmxStealthR0.cpp for
+     * the shared exit-qualification decode helpers (only used by VMX). */
+    if (pVCpu0->CTX_SUFF(pVM)->hm.s.fOhbHideDescTables)
+    {
+        pVmcbCtrl0->u64InterceptCtrl |= SVM_CTRL_INTERCEPT_IDTR_READS
+                                      | SVM_CTRL_INTERCEPT_GDTR_READS
+                                      | SVM_CTRL_INTERCEPT_LDTR_READS
+                                      | SVM_CTRL_INTERCEPT_TR_READS;
+        LogRel(("OHB/SVM: descriptor-table exiting ENABLED — SIDT/SGDT/SLDT/STR will trap\n"));
+    }
+#endif
 
 #ifdef HMSVM_ALWAYS_TRAP_TASK_SWITCH
     pVmcbCtrl0->u64InterceptCtrl |= SVM_CTRL_INTERCEPT_TASK_SWITCH;
@@ -5486,6 +5515,14 @@ static VBOXSTRICTRC hmR0SvmHandleExit(PVMCPUCC pVCpu, PSVMTRANSIENT pSvmTransien
                 case SVM_EXIT_SWINT:    VMEXIT_CALL_RET(0, hmR0SvmExitSwInt(pVCpu, pSvmTransient));
                 case SVM_EXIT_TR_READ:  VMEXIT_CALL_RET(0, hmR0SvmExitTrRead(pVCpu, pSvmTransient));
                 case SVM_EXIT_TR_WRITE: VMEXIT_CALL_RET(0, hmR0SvmExitTrWrite(pVCpu, pSvmTransient)); /* Also OS/2 TLB workaround. */
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+                /* OpenHuizeBox descriptor-table-spoof handlers (enabled only when
+                 * HM/OhbHideDescTables=1). Intercepts are programmed in the VMCB
+                 * setup at line ~1082 above. */
+                case SVM_EXIT_IDTR_READ: VMEXIT_CALL_RET(0, hmR0SvmExitIdtrReadStealth(pVCpu, pSvmTransient));
+                case SVM_EXIT_GDTR_READ: VMEXIT_CALL_RET(0, hmR0SvmExitGdtrReadStealth(pVCpu, pSvmTransient));
+                case SVM_EXIT_LDTR_READ: VMEXIT_CALL_RET(0, hmR0SvmExitLdtrReadStealth(pVCpu, pSvmTransient));
+#endif
 
                 default:
                 {
@@ -8944,6 +8981,116 @@ HMSVM_EXIT_DECL hmR0SvmExitTrWrite(PVMCPUCC pVCpu, PSVMTRANSIENT pSvmTransient)
 
     return hmR0SvmExitInterpretInstruction(pVCpu, pSvmTransient, CPUMCTX_EXTRN_TR | CPUMCTX_EXTRN_GDTR, HM_CHANGED_GUEST_TR);
 }
+
+
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+/**
+ * OpenHuizeBox SVM: #VMEXIT handler for SIDT with descriptor-table spoofing.
+ *
+ * Substitutes the guest's IDTR.base/limit with the operator-configured fake
+ * values (HM/OhbFakeIdtrBase, HM/OhbFakeIdtrLimit) before letting IEM emulate
+ * the SIDT memory store. This defeats the classic Pafish/Al-Khaser Red-Pill
+ * SIDT-base check on AMD-V hosts. Mirrors the VMX path in VMXAllTemplate.cpp.h
+ * (around line 8507).
+ */
+HMSVM_EXIT_DECL hmR0SvmExitIdtrReadStealth(PVMCPUCC pVCpu, PSVMTRANSIENT pSvmTransient)
+{
+    HMSVM_VALIDATE_EXIT_HANDLER_PARAMS(pVCpu, pSvmTransient);
+    HMSVM_CPUMCTX_IMPORT_STATE(pVCpu, IEM_CPUMCTX_EXTRN_MUST_MASK | CPUMCTX_EXTRN_IDTR);
+
+    PVMCC pVM = pVCpu->CTX_SUFF(pVM);
+    uint64_t const u64SaveBase  = pVCpu->cpum.GstCtx.idtr.pIdt;
+    uint16_t const u16SaveLimit = pVCpu->cpum.GstCtx.idtr.cbIdt;
+
+    bool fSwapped = false;
+    if (   pVM->hm.s.fOhbHideDescTables
+        && pVM->hm.s.u64OhbFakeIdtrBase != 0)
+    {
+        pVCpu->cpum.GstCtx.idtr.pIdt = pVM->hm.s.u64OhbFakeIdtrBase;
+        pVCpu->cpum.GstCtx.idtr.cbIdt = pVM->hm.s.u16OhbFakeIdtrLimit;
+        fSwapped = true;
+    }
+
+    Log4Func(("OHB/SVM SIDT @ rip=%RX64 swap=%d fake=%RX64\n",
+              pVCpu->cpum.GstCtx.rip, fSwapped, pVM->hm.s.u64OhbFakeIdtrBase));
+
+    VBOXSTRICTRC rcStrict = IEMExecOne(pVCpu);
+
+    /* Restore the true IDTR so subsequent host-side guest accounting is correct.
+     * IEM has already written the (faked) value to guest memory by now. */
+    if (fSwapped)
+    {
+        pVCpu->cpum.GstCtx.idtr.pIdt = u64SaveBase;
+        pVCpu->cpum.GstCtx.idtr.cbIdt = u16SaveLimit;
+    }
+
+    if (rcStrict == VINF_IEM_RAISED_XCPT)
+    {
+        ASMAtomicUoOrU64(&pVCpu->hm.s.fCtxChanged, HM_CHANGED_RAISED_XCPT_MASK);
+        rcStrict = VINF_SUCCESS;
+    }
+    HMSVM_CHECK_SINGLE_STEP(pVCpu, rcStrict);
+    return VBOXSTRICTRC_VAL(rcStrict);
+}
+
+
+/**
+ * OpenHuizeBox SVM: #VMEXIT handler for SGDT with descriptor-table spoofing.
+ * See hmR0SvmExitIdtrReadStealth for the SIDT companion.
+ */
+HMSVM_EXIT_DECL hmR0SvmExitGdtrReadStealth(PVMCPUCC pVCpu, PSVMTRANSIENT pSvmTransient)
+{
+    HMSVM_VALIDATE_EXIT_HANDLER_PARAMS(pVCpu, pSvmTransient);
+    HMSVM_CPUMCTX_IMPORT_STATE(pVCpu, IEM_CPUMCTX_EXTRN_MUST_MASK | CPUMCTX_EXTRN_GDTR);
+
+    PVMCC pVM = pVCpu->CTX_SUFF(pVM);
+    uint64_t const u64SaveBase  = pVCpu->cpum.GstCtx.gdtr.pGdt;
+    uint16_t const u16SaveLimit = pVCpu->cpum.GstCtx.gdtr.cbGdt;
+
+    bool fSwapped = false;
+    if (   pVM->hm.s.fOhbHideDescTables
+        && pVM->hm.s.u64OhbFakeGdtrBase != 0)
+    {
+        pVCpu->cpum.GstCtx.gdtr.pGdt = pVM->hm.s.u64OhbFakeGdtrBase;
+        pVCpu->cpum.GstCtx.gdtr.cbGdt = pVM->hm.s.u16OhbFakeGdtrLimit;
+        fSwapped = true;
+    }
+
+    Log4Func(("OHB/SVM SGDT @ rip=%RX64 swap=%d fake=%RX64\n",
+              pVCpu->cpum.GstCtx.rip, fSwapped, pVM->hm.s.u64OhbFakeGdtrBase));
+
+    VBOXSTRICTRC rcStrict = IEMExecOne(pVCpu);
+
+    if (fSwapped)
+    {
+        pVCpu->cpum.GstCtx.gdtr.pGdt = u64SaveBase;
+        pVCpu->cpum.GstCtx.gdtr.cbGdt = u16SaveLimit;
+    }
+
+    if (rcStrict == VINF_IEM_RAISED_XCPT)
+    {
+        ASMAtomicUoOrU64(&pVCpu->hm.s.fCtxChanged, HM_CHANGED_RAISED_XCPT_MASK);
+        rcStrict = VINF_SUCCESS;
+    }
+    HMSVM_CHECK_SINGLE_STEP(pVCpu, rcStrict);
+    return VBOXSTRICTRC_VAL(rcStrict);
+}
+
+
+/**
+ * OpenHuizeBox SVM: #VMEXIT handler for SLDT — pass-through emulate.
+ *
+ * On Win10 x64 LDTR is unused (selector = 0), so SLDT naturally returns 0.
+ * We intercept here only because the SVM intercept block was widened to
+ * cover all 4 desc-table read instructions; no fake value is substituted.
+ */
+HMSVM_EXIT_DECL hmR0SvmExitLdtrReadStealth(PVMCPUCC pVCpu, PSVMTRANSIENT pSvmTransient)
+{
+    HMSVM_VALIDATE_EXIT_HANDLER_PARAMS(pVCpu, pSvmTransient);
+    Log4Func(("OHB/SVM SLDT @ rip=%RX64 (passthrough)\n", pVCpu->cpum.GstCtx.rip));
+    return hmR0SvmExitInterpretInstruction(pVCpu, pSvmTransient, CPUMCTX_EXTRN_LDTR, 0);
+}
+#endif /* VBOX_WITH_OHB_VMX_STEALTH */
 
 
 /**
