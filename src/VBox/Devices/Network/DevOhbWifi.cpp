@@ -161,7 +161,13 @@ const PDMDEVREG g_DeviceOhbWifi =
     /* .u32Version = */             PDM_DEVREG_VERSION,
     /* .uReserved0 = */             0,
     /* .szName = */                 "ohbwifi",
-    /* .fFlags = */                 PDM_DEVREG_FLAGS_DEFAULT_BITS,
+    /* VBox 7.2 PDM requires NEW_STYLE on every device registration; without
+     * it pdmR3DevReg_Register hard-fails the entire VBoxDD load with
+     *   "PDM_DEVREG_FLAGS_NEW_STYLE not set for szName=ohbwifi!"
+     * Every in-tree device sets this; the original fork commit
+     * (845a1db020d) missed it which is why no VM ever powered on with
+     * the wifi stub compiled in. */
+    /* .fFlags = */                 PDM_DEVREG_FLAGS_DEFAULT_BITS | PDM_DEVREG_FLAGS_NEW_STYLE,
     /* .fClass = */                 PDM_DEVREG_CLASS_NETWORK,
     /* .cMaxInstances = */          1,
     /* .uSharedVersion = */         1,

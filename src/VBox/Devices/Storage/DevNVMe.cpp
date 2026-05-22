@@ -7132,7 +7132,7 @@ static DECLCALLBACK(int) nvmeR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
                                   "CtrlMemBufLists|"
                                   "CtrlMemBufCqs|"
                                   "CtrlMemBufSqs|"
-                                  "MsiXSupported",
+                                  "MsiXSupported|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode",
                                   "");
 
     rc = pHlp->pfnCFGMQueryU16Def(pCfg, "QueuesSubmissionMax", &cQueuesSubmMax, NVME_QUEUES_SUBMISSION_MAX_DEF);

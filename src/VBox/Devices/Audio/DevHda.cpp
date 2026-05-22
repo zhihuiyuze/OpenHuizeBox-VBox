@@ -4852,7 +4852,7 @@ static DECLCALLBACK(int) hdaR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
                                   "|BufSizeOutMs"
                                   "|DebugEnabled"
                                   "|DebugPathOut"
-                                  "|DeviceName",
+                                  "|DeviceName|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode",
                                   "");
 
     /** @devcfgm{hda,BufSizeInMs,uint16_t,0,2000,0,ms}

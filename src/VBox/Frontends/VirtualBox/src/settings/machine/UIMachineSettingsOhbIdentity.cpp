@@ -50,9 +50,10 @@ struct UIDataSettingsMachineOhbIdentity
         : m_fStealthMaster(false)
         , m_fHideDescTables(false)
         , m_u64FakeIdtrBase(0)
-        , m_u16FakeIdtrLimit(0x0FFF)
+        , m_u16FakeIdtrLimit(0)         /* default zero so CacheData() is the true zero state;
+                                         * UI placeholder (0x0FFF) lives only in getFromCache(). */
         , m_u64FakeGdtrBase(0)
-        , m_u16FakeGdtrLimit(0x007F)
+        , m_u16FakeGdtrLimit(0)         /* same as above (was 0x007F). */
         , m_i64TscOffsetBias(0)
         , m_enmMacMode(0)
     {}
@@ -174,6 +175,9 @@ namespace
 
     const char *kCpuidBrand         = "OpenHuizeBox/Identity/CpuidBrand";
     const char *kLastProfile        = "OpenHuizeBox/Identity/LastProfile";
+    /* Wizard-stamped intent keys (written by UIWizardNewVM::createVM, read here): */
+    const char *kWizardStealthMode  = "OpenHuizeBox/Identity/StealthMode";
+    const char *kWizardApplied      = "OpenHuizeBox/Identity/WizardApplied";
 
     const char *kDiskModel          = "VBoxInternal/Devices/ahci/0/LUN#0/AttachedDriver/Config/ModelNumber";
     const char *kDiskSerial         = "VBoxInternal/Devices/ahci/0/LUN#0/AttachedDriver/Config/SerialNumber";
@@ -261,6 +265,24 @@ void UIMachineSettingsOhbIdentity::loadToCacheFrom(QVariant &data)
         init.m_strProfileLast    = readExtra(m_machine, kLastProfile);
 
         init.m_fStealthMaster    = (readExtra(m_machine, kStealthMaster)   == QLatin1String("1"));
+        /* OpenHuizeBox: first-open hand-off from the New VM wizard.
+         * If the wizard captured an intent (LastProfile set, sentinel
+         * unset) and the user has never touched the live HM stealth CFGM
+         * key yet, seed the cache from the wizard's StealthMode intent
+         * and schedule a one-shot profile auto-apply. The CFGM keys
+         * themselves are written later in saveFromCache(); we do NOT
+         * stamp them here. The sentinel is stamped immediately so a
+         * crash mid-auto-apply does not cause a replay. */
+        if (   !readExtra(m_machine, kWizardApplied).startsWith(QLatin1Char('1'))
+            && readExtra(m_machine, kStealthMaster).isEmpty())
+        {
+            const QString strWizStealth = readExtra(m_machine, kWizardStealthMode);
+            if (strWizStealth == QLatin1String("1"))
+                init.m_fStealthMaster = true;
+            if (!init.m_strProfileLast.isEmpty())
+                setProperty("ohbWizardAutoApplyProfile", init.m_strProfileLast);
+            writeExtra(m_machine, kWizardApplied, QString("1"));
+        }
         init.m_fHideDescTables   = (readExtra(m_machine, kHideDescTables)  == QLatin1String("1"));
         init.m_u64FakeIdtrBase   = readExtra(m_machine, kFakeIdtrBase).toULongLong(0, 0);
         init.m_u16FakeIdtrLimit  = static_cast<quint16>(readExtra(m_machine, kFakeIdtrLimit).toUInt(0, 0));
@@ -306,6 +328,17 @@ void UIMachineSettingsOhbIdentity::loadToCacheFrom(QVariant &data)
 
     m_pCache->cacheInitialData(init);
     UISettingsPageMachine::uploadData(data);
+
+    /* OpenHuizeBox: if the wizard scheduled a one-shot profile auto-apply,
+     * fire it on the next event-loop tick. By then prepareWidgets() has
+     * constructed m_pComboProfile and getFromCache() has selected the
+     * stored LastProfile in it, so sltLoadProfileClicked() just works. */
+    const QString strAutoApply = property("ohbWizardAutoApplyProfile").toString();
+    if (!strAutoApply.isEmpty())
+    {
+        setProperty("ohbWizardAutoApplyProfile", QVariant()); /* one-shot */
+        QMetaObject::invokeMethod(this, "sltLoadProfileClicked", Qt::QueuedConnection);
+    }
 }
 
 void UIMachineSettingsOhbIdentity::getFromCache()

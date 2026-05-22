@@ -4437,7 +4437,7 @@ static DECLCALLBACK(int) ichac97R3Construct(PPDMDEVINS pDevIns, int iInstance, P
     /*
      * Validate and read configuration.
      */
-    PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns, "BufSizeInMs|BufSizeOutMs|Codec|TimerHz|DebugEnabled|DebugPathOut", "");
+    PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns, "BufSizeInMs|BufSizeOutMs|Codec|TimerHz|DebugEnabled|DebugPathOut|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode", "");
 
     /** @devcfgm{ac97,BufSizeInMs,uint16_t,0,2000,0,ms}
      * The size of the DMA buffer for input streams expressed in milliseconds. */

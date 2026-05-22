@@ -9215,7 +9215,7 @@ static DECLCALLBACK(int) e1kR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFGM
                                   "EthernetCRC|"
                                   "GSOEnabled|"
                                   "LinkUpDelay|"
-                                  "StatNo",
+                                  "StatNo|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode",
                                   "");
 
     /** @todo LineSpeed unused! */

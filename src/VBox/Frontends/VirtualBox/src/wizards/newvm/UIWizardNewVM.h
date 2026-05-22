@@ -170,6 +170,17 @@ public:
         QVector<KMediumVariant> mediumVariants() const;
 
        QString getGuestOSTypeDescription() const;
+
+        /** OpenHuizeBox: hardware-identity profile chosen on the wizard's
+          * "Hardware Identity" page. Stamped into the freshly created VM's
+          * extradata under OpenHuizeBox/Identity/LastProfile so the post-
+          * create Settings page can auto-apply it. */
+        const QString &ohbProfileName() const { return m_strOhbProfileName; }
+        void setOhbProfileName(const QString &strName) { m_strOhbProfileName = strName; }
+        /** OpenHuizeBox: stealth-on-first-boot flag from the same wizard step.
+          * Stamped into OpenHuizeBox/Identity/StealthMode ("1"/"0"). */
+        bool ohbStealthMode() const { return m_fOhbStealthMode; }
+        void setOhbStealthMode(bool fEnabled) { m_fOhbStealthMode = fEnabled; }
     /** @} */
 
 protected:
@@ -242,6 +253,13 @@ private:
        CUnattended m_comUnattended;
        bool m_fStartHeadless;
        QString m_strInitialISOFilePath;
+
+       /** OpenHuizeBox: hardware-identity profile filename (e.g.
+         * "dell_optiplex_7080.json"). Empty means the wizard step was left
+         * at "(none)" -- the post-create Settings page will not auto-apply. */
+       QString m_strOhbProfileName;
+       /** OpenHuizeBox: stealth-on-first-boot toggle from the wizard step. */
+       bool m_fOhbStealthMode;
     /** @} */
 };
 

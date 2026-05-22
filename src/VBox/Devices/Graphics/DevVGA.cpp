@@ -6522,7 +6522,16 @@ static DECLCALLBACK(int)   vgaR3Construct(PPDMDEVINS pDevIns, int iInstance, PCF
                                             "|VMSVGA2dGBO"
 # endif
                                             "|SuppressNewYearSplash"
-                                            "|3DEnabled";
+                                            "|3DEnabled"
+                                            /* OpenHuizeBox PCI identity override keys --
+                                             * accepted by ohbPciOverrideFromExtraData(). */
+                                            "|PciVendorId"
+                                            "|PciDeviceId"
+                                            "|PciSubsysVendorId"
+                                            "|PciSubsysDeviceId"
+                                            "|PciRevisionId"
+                                            "|PciClassCode"
+                                            "|PciSubClassCode";
 
     PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns, s_szMscWorkaround, "");
 

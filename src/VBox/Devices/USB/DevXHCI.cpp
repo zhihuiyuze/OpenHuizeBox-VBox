@@ -7928,7 +7928,7 @@ static DECLCALLBACK(int) xhciR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
     /*
      * Validate and read configuration.
      */
-    PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns, "USB2Ports|USB3Ports|ChipType", "");
+    PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns, "USB2Ports|USB3Ports|ChipType|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode", "");
 
     /* Number of USB2 ports option. */
     rc = pHlp->pfnCFGMQueryU8Def(pCfg, "USB2Ports", &cUsb2Ports, XHCI_NDP_20_DEFAULT);

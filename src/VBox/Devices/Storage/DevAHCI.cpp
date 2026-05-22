@@ -5839,7 +5839,7 @@ static DECLCALLBACK(int) ahciR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
      */
     PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns,
                                   "PrimaryMaster|PrimarySlave|SecondaryMaster"
-                                  "|SecondarySlave|PortCount|Bootable|CmdSlotsAvail|TigerHack",
+                                  "|SecondarySlave|PortCount|Bootable|CmdSlotsAvail|TigerHack|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode",
                                   "Port*");
 
     rc = pHlp->pfnCFGMQueryU32Def(pCfg, "PortCount", &pThis->cPortsImpl, AHCI_MAX_NR_PORTS_IMPL);

@@ -284,6 +284,17 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
                               "|LovelyMesaDrvWorkaround"
                               "|MissingOS2TlbFlushWorkaround"
                               "|AlwaysInterceptVmxMovDRx"
+                              /* OpenHuizeBox stealth knobs (read further down in HMR3Init).
+                               * Without these, CFGMR3ValidateConfig rejects any VM whose
+                               * extradata sets VBoxInternal/HM/Ohb* with
+                               * VERR_CFGM_CONFIG_UNKNOWN_VALUE. */
+                              "|OhbStealth"
+                              "|OhbHideDescTables"
+                              "|OhbFakeIdtrBase"
+                              "|OhbFakeIdtrLimit"
+                              "|OhbFakeGdtrBase"
+                              "|OhbFakeGdtrLimit"
+                              "|OhbTscOffsetBias"
                               , "" /* pszValidNodes */, "HM" /* pszWho */, 0 /* uInstance */);
     if (RT_FAILURE(rc))
         return rc;

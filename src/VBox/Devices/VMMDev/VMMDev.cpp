@@ -115,6 +115,7 @@
 #include <iprt/string.h>
 #include <iprt/system.h>
 #include <iprt/time.h>
+#include "../Bus/DevPciOhbOverride.h"   /* OpenHuizeBox per-VM PCI identity override. */
 #ifndef IN_RC
 # include <iprt/mem.h>
 # include <iprt/memsafer.h>
@@ -4956,6 +4957,9 @@ static DECLCALLBACK(int) vmmdevConstruct(PPDMDEVINS pDevIns, int iInstance, PCFG
                                   "HGCMHeapBudgetReserved1|"
                                   "HGCMHeapBudgetUser|"
                                   "HGCMHeapBudgetGuest"
+                                  /* OpenHuizeBox PCI identity override keys */
+                                  "|PciVendorId|PciDeviceId|PciSubsysVendorId"
+                                  "|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode"
                                   ,
                                   "");
 
@@ -5159,6 +5163,8 @@ static DECLCALLBACK(int) vmmdevConstruct(PPDMDEVINS pDevIns, int iInstance, PCFG
     rc = PDMDevHlpPCIRegister(pDevIns, pPciDev);
     if (RT_FAILURE(rc))
         return rc;
+    /* OpenHuizeBox: honour per-VM PCI identity override (VEN_80EE -> Intel/etc). */
+    ohbPciOverrideFromExtraData(pDevIns, pPciDev);
     if (pPciDev->uDevFn != 32 || iInstance != 0)
         Log(("!!WARNING!!: pThis->PciDev.uDevFn=%d (ignore if testcase or no started by Main)\n", pPciDev->uDevFn));
 

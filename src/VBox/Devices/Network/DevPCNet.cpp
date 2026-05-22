@@ -4987,7 +4987,7 @@ static DECLCALLBACK(int) pcnetR3Construct(PPDMDEVINS pDevIns, int iInstance, PCF
      * Validate configuration.
      */
     PDMDEV_VALIDATE_CONFIG_RETURN(pDevIns,
-                                  "MAC|CableConnected|Am79C973|ChipType|Port|IRQ|LineSpeed|PrivIfEnabled|LinkUpDelay|StatNo",
+                                  "MAC|CableConnected|Am79C973|ChipType|Port|IRQ|LineSpeed|PrivIfEnabled|LinkUpDelay|StatNo|PciVendorId|PciDeviceId|PciSubsysVendorId|PciSubsysDeviceId|PciRevisionId|PciClassCode|PciSubClassCode",
                                   "");
     /*
      * Read the configuration.

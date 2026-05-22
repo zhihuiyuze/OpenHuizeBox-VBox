@@ -42,6 +42,7 @@
 #include "UIWizardNewVMUnattendedPage.h"
 #include "UIWizardNewVMHardwarePage.h"
 #include "UIWizardNewVMExpertPage.h"
+#include "UIWizardNewVMPageOhbIdentity.h"
 #include "UIWizardNewVMSummaryPage.h"
 
 /* COM includes: */
@@ -86,6 +87,7 @@ UIWizardNewVM::UIWizardNewVM(QWidget *pParent,
     , m_pActionPool(pActionPool)
     , m_fStartHeadless(false)
     , m_strInitialISOFilePath(strISOFilePath)
+    , m_fOhbStealthMode(false)
 {
 #ifndef VBOX_WS_MAC
     /* Assign watermark: */
@@ -113,6 +115,8 @@ void UIWizardNewVM::populatePages()
             m_iUnattendedInstallPageIndex = addPage(new UIWizardNewVMUnattendedPage("tk_create-vm-unattended-install" /* help keyword */));
             setUnattendedPageVisible(false);
             addPage(new UIWizardNewVMHardwarePage("tk_create-vm-hardware" /* help keyword*/));
+            /* OpenHuizeBox: optional hardware-identity profile picker. */
+            addPage(new UIWizardNewVMPageOhbIdentity("tk_create-vm-ohb-identity" /* help keyword */));
             addPage(new UIWizardNewVMSummaryPage);
             break;
         }
@@ -193,6 +197,17 @@ bool UIWizardNewVM::createVM()
         cleanWizard();
         return false;
     }
+
+    /* OpenHuizeBox: stamp wizard-captured identity intent into extradata.
+     * Key names MUST match UIMachineSettingsOhbIdentity.cpp constants
+     * (kLastProfile + the new "OpenHuizeBox/Identity/StealthMode" wizard
+     * intent key). The Settings page will read these on first open and
+     * auto-apply the chosen profile exactly once (guarded by the
+     * "OpenHuizeBox/Identity/WizardApplied" sentinel). */
+    if (!m_strOhbProfileName.isEmpty())
+        m_machine.SetExtraData(QString("OpenHuizeBox/Identity/LastProfile"), m_strOhbProfileName);
+    m_machine.SetExtraData(QString("OpenHuizeBox/Identity/StealthMode"),
+                           m_fOhbStealthMode ? QString("1") : QString("0"));
 
     if (!attachDefaultDevices())
     {
