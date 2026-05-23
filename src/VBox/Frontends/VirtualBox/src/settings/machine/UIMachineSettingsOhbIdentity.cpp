@@ -164,6 +164,7 @@ namespace
     const char *kDmiChassisVendor   = "VBoxInternal/Devices/pcbios/0/Config/DmiChassisVendor";
     const char *kDmiChassisVersion  = "VBoxInternal/Devices/pcbios/0/Config/DmiChassisVersion";
     const char *kDmiChassisType     = "VBoxInternal/Devices/pcbios/0/Config/DmiChassisType";
+    const char *kDmiChassisAssetTag = "VBoxInternal/Devices/pcbios/0/Config/DmiChassisAssetTag";
     const char *kDmiBiosVendor      = "VBoxInternal/Devices/pcbios/0/Config/DmiBIOSVendor";
     const char *kDmiBiosVersion     = "VBoxInternal/Devices/pcbios/0/Config/DmiBIOSVersion";
     const char *kDmiBiosRelease     = "VBoxInternal/Devices/pcbios/0/Config/DmiBIOSReleaseDate";
@@ -172,6 +173,7 @@ namespace
     const char *kAcpiOemId          = "VBoxInternal/Devices/acpi/0/Config/AcpiOemId";
     const char *kAcpiTableId        = "VBoxInternal/Devices/acpi/0/Config/AcpiOemTabId";
     const char *kAcpiCreatorId      = "VBoxInternal/Devices/acpi/0/Config/AcpiCreatorId";
+    const char *kAcpiCpuTableId     = "VBoxInternal/Devices/acpi/0/Config/AcpiCpuTableId";
 
     const char *kCpuidBrand         = "OpenHuizeBox/Identity/CpuidBrand";
     const char *kLastProfile        = "OpenHuizeBox/Identity/LastProfile";
@@ -179,9 +181,26 @@ namespace
     const char *kWizardStealthMode  = "OpenHuizeBox/Identity/StealthMode";
     const char *kWizardApplied      = "OpenHuizeBox/Identity/WizardApplied";
 
-    const char *kDiskModel          = "VBoxInternal/Devices/ahci/0/LUN#0/AttachedDriver/Config/ModelNumber";
-    const char *kDiskSerial         = "VBoxInternal/Devices/ahci/0/LUN#0/AttachedDriver/Config/SerialNumber";
-    const char *kDiskFirmware       = "VBoxInternal/Devices/ahci/0/LUN#0/AttachedDriver/Config/FirmwareRevision";
+    /* Disk identity strings are read by DevAHCI from Config/Port0/* at ATA
+     * IDENTIFY time. The DrvVD LUN#X/AttachedDriver/Config path was a dead
+     * end (DrvVD does not surface identity to the guest), so writes there
+     * had no visible effect in the guest. */
+    const char *kDiskModel          = "VBoxInternal/Devices/ahci/0/Config/Port0/ModelNumber";
+    const char *kDiskSerial         = "VBoxInternal/Devices/ahci/0/Config/Port0/SerialNumber";
+    const char *kDiskFirmware       = "VBoxInternal/Devices/ahci/0/Config/Port0/FirmwareRevision";
+    /* CD-ROM identity at Port 1: 8-byte vendor, 16-byte product, 4-byte rev. */
+    const char *kCdromVendor        = "VBoxInternal/Devices/ahci/0/Config/Port1/ATAPIVendorId";
+    const char *kCdromProduct       = "VBoxInternal/Devices/ahci/0/Config/Port1/ATAPIProductId";
+    const char *kCdromRevision      = "VBoxInternal/Devices/ahci/0/Config/Port1/ATAPIRevision";
+
+    /* PCI identity override on the VMMDev device (eliminates the residual
+     * VEN_80EE&DEV_CAFE entry in Device Manager). Use a vendor that has no
+     * Win10 inbox driver (e.g. 0x1B36 Red Hat) so the device shows as
+     * generic "Unknown" rather than triggering an inbox driver install. */
+    const char *kVmmDevPciVendor    = "VBoxInternal/Devices/VMMDev/0/Config/PciVendorId";
+    const char *kVmmDevPciDevice    = "VBoxInternal/Devices/VMMDev/0/Config/PciDeviceId";
+    const char *kVmmDevPciSubVendor = "VBoxInternal/Devices/VMMDev/0/Config/PciSubsysVendorId";
+    const char *kVmmDevPciSubDevice = "VBoxInternal/Devices/VMMDev/0/Config/PciSubsysDeviceId";
 
     const char *kMacMode            = "OpenHuizeBox/Identity/MacMode";
     const char *kMacPoolOui         = "OpenHuizeBox/Identity/MacPoolOui";
@@ -857,11 +876,13 @@ void UIMachineSettingsOhbIdentity::sltRestoreDefaultsClicked()
         kFakeGdtrBase, kFakeGdtrLimit, kTscOffsetBias,
         kDmiSysVendor, kDmiSysProduct, kDmiSysVersion, kDmiSysSku, kDmiSysFamily, kDmiSysSerial,
         kDmiBoardVendor, kDmiBoardProduct, kDmiBoardVersion, kDmiBoardSerial,
-        kDmiChassisVendor, kDmiChassisVersion, kDmiChassisType,
+        kDmiChassisVendor, kDmiChassisVersion, kDmiChassisType, kDmiChassisAssetTag,
         kDmiBiosVendor, kDmiBiosVersion, kDmiBiosRelease, kDmiProcMfg,
-        kAcpiOemId, kAcpiTableId, kAcpiCreatorId,
+        kAcpiOemId, kAcpiTableId, kAcpiCreatorId, kAcpiCpuTableId,
         kCpuidBrand, kLastProfile,
         kDiskModel, kDiskSerial, kDiskFirmware,
+        kCdromVendor, kCdromProduct, kCdromRevision,
+        kVmmDevPciVendor, kVmmDevPciDevice, kVmmDevPciSubVendor, kVmmDevPciSubDevice,
         kMacMode, kMacPoolOui, kMacCustomOui, kMacFull
     };
     for (size_t i = 0; i < sizeof(all)/sizeof(all[0]); ++i)
