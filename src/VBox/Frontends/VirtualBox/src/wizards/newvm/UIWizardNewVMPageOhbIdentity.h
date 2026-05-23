@@ -62,8 +62,8 @@ private slots:
 
     /** User picked a different profile in the combobox. */
     void sltProfileSelectionChanged(int iIndex);
-    /** User toggled the stealth checkbox. */
-    void sltStealthToggled(bool fChecked);
+    /** User changed the Stealth Level dropdown (None / L1 / L2). */
+    void sltStealthLevelChanged(int iIndex);
 
 private:
 
@@ -90,11 +90,12 @@ private:
         QIRichTextLabel *m_pLabel;
         QLabel          *m_pLblProfile;
         QComboBox       *m_pComboProfile;
-        QCheckBox       *m_pChkStealth;
+        QLabel          *m_pLblStealthLevel;
+        QComboBox       *m_pCmbStealthLevel;
         QLabel          *m_pLblNote;
     /** @} */
 
-    /** True after the user touched the combobox, so initializePage()
+    /** True after the user touched a control, so initializePage()
       * does not overwrite a deliberate user pick on re-visit. */
     bool m_fUserModifiedProfile;
     bool m_fUserModifiedStealth;
