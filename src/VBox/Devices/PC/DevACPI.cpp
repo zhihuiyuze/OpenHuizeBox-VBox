@@ -1403,7 +1403,17 @@ static int acpiR3FetchBatteryStatus(PACPISTATE pThis, PACPISTATER3 pThisCC)
     int                rc;
 
     if (!pThisCC->pDrv)
+    {
+        /* No host battery driver. Emit a static "fully-charged, idle" state
+         * so the guest sees a healthy LION cell at 100% capacity. Matches the
+         * synthetic-present return value from acpiR3GetBatteryDeviceStatus
+         * above. */
+        p[BAT_STATUS_STATE]              = 0;       /* not discharging, not charging */
+        p[BAT_STATUS_PRESENT_RATE]       = 0;       /* mW */
+        p[BAT_STATUS_REMAINING_CAPACITY] = 50000;   /* mWh */
+        p[BAT_STATUS_PRESENT_VOLTAGE]    = 12600;   /* mV (3S Li-Ion full) */
         return VINF_SUCCESS;
+    }
     rc = pThisCC->pDrv->pfnQueryBatteryStatus(pThisCC->pDrv, &fPresent, &hostRemainingCapacity,
                                               &hostBatteryState, &hostPresentRate);
     AssertRC(rc);
@@ -1463,7 +1473,19 @@ static uint32_t acpiR3GetBatteryDeviceStatus(PACPISTATER3 pThisCC)
     int                rc;
 
     if (!pThisCC->pDrv)
-        return 0;
+    {
+        /* No host-side battery driver attached. Report a synthetic full-charged
+         * battery so the ACPI BAT0 device enumerates in the guest -- this gives
+         * Win32_Battery a non-empty result on notebook-class chassis profiles
+         * without requiring a host with an actual battery. The values used
+         * elsewhere in this file (fully charged LION cell, ~58 Wh, "Simplo"
+         * OEM) match the static identity already declared in vbox.dsl. */
+        return STA_DEVICE_PRESENT_MASK
+             | STA_DEVICE_ENABLED_MASK
+             | STA_DEVICE_SHOW_IN_UI_MASK
+             | STA_DEVICE_FUNCTIONING_PROPERLY_MASK
+             | STA_BATTERY_PRESENT_MASK;
+    }
     rc = pThisCC->pDrv->pfnQueryBatteryStatus(pThisCC->pDrv, &fPresent, &hostRemainingCapacity,
                                               &hostBatteryState, &hostPresentRate);
     AssertRC(rc);

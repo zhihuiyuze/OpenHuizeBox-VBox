@@ -524,6 +524,18 @@ typedef struct VGAState
 #ifdef VBOX_WITH_HGSMI
     STAMCOUNTER                 StatHgsmiMdaCgaAccesses;
 #endif
+
+    /** OpenHuizeBox: VRAM size to ADVERTISE to the guest via VBE/SVGA
+     *  registers (Windows Win32_VideoController.AdapterRAM reads this).
+     *  Real backing allocation still uses vram_size; the PCI BAR2 region is
+     *  sized to vram_size, so this only changes the advertised VBE
+     *  Capability ID 0/SVGA_REG_VRAM_SIZE values, not the actually-mapped
+     *  amount. Default = vram_size (no change in behaviour unless the
+     *  ReportedVRamSize CFGM key is set).
+     *  Placed at the END of VGASTATE to avoid disturbing the 8-byte
+     *  alignment of fields earlier in the struct. */
+    uint32_t                    cbReportedVRam;
+    uint32_t                    u32OhbVgaPadding;
 } VGAState;
 #ifdef VBOX
 /** VGA state. */

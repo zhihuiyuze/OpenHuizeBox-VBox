@@ -847,7 +847,8 @@ static uint32_t vbe_read_cfg(PVGASTATE pThis)
     switch (u16Id)
     {
         case VBE_DISPI_CFG_ID_VERSION:   val = 1; break;
-        case VBE_DISPI_CFG_ID_VRAM_SIZE: val = pThis->vram_size; break;
+        /* OpenHuizeBox: report spoofed VRAM size (WMI Win32_VideoController.AdapterRAM). */
+        case VBE_DISPI_CFG_ID_VRAM_SIZE: val = pThis->cbReportedVRam; break;
         case VBE_DISPI_CFG_ID_3D:        val = pThis->f3DEnabled; break;
 # ifdef VBOX_WITH_VMSVGA
         case VBE_DISPI_CFG_ID_VMSVGA:    val = pThis->fVMSVGAEnabled; break;
@@ -3299,7 +3300,8 @@ vgaIoPortReadVbeData(PPDMDEVINS pDevIns, void *pvUser, RTIOPORT offPort, uint32_
         if (pThis->vbe_regs[VBE_DISPI_INDEX_ID] == VBE_DISPI_ID_CFG)
             *pu32 = vbe_ioport_read_data(pThis, offPort); /* New interface. */
         else
-            *pu32 = pThis->vram_size; /* Quick hack for getting the vram size. */
+            /* OpenHuizeBox: report spoofed VRAM size to guest (WMI/AdapterRAM). */
+            *pu32 = pThis->cbReportedVRam; /* Quick hack for getting the vram size. */
         return VINF_SUCCESS;
     }
     ASSERT_GUEST_MSG_FAILED(("vgaIoPortReadVbeData: offPort=%#x cb=%d\n", offPort, cb));
@@ -6478,6 +6480,9 @@ static DECLCALLBACK(int)   vgaR3Construct(PPDMDEVINS pDevIns, int iInstance, PCF
      * Validate configuration.
      */
     static const char s_szMscWorkaround[] = "VRamSize"
+                                            /* OpenHuizeBox: VRAM size reported via VBE/SVGA
+                                             * to spoof Win32_VideoController.AdapterRAM. */
+                                            "|ReportedVRamSize"
                                             "|MonitorCount"
                                             "|FadeIn"
                                             "|FadeOut"
@@ -6549,6 +6554,10 @@ static DECLCALLBACK(int)   vgaR3Construct(PPDMDEVINS pDevIns, int iInstance, PCF
     if (pThis->vram_size & (_256K - 1)) /* Make sure there are no partial banks even in planar modes. */
         return PDMDevHlpVMSetError(pDevIns, VERR_INVALID_PARAMETER, RT_SRC_POS,
                                    "VRamSize is not a multiple of 256K (%#x)", pThis->vram_size);
+
+    /* OpenHuizeBox: reported VRAM size for guest WMI/AdapterRAM spoofing; defaults to real vram_size. */
+    rc = pHlp->pfnCFGMQueryU32Def(pCfg, "ReportedVRamSize", &pThis->cbReportedVRam, pThis->vram_size);
+    AssertLogRelRCReturn(rc, rc);
 
     rc = pHlp->pfnCFGMQueryU32Def(pCfg, "MonitorCount", &pThis->cMonitors, 1);
     AssertLogRelRCReturn(rc, rc);

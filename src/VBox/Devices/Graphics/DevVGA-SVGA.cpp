@@ -1196,7 +1196,8 @@ static int vmsvgaReadPort(PPDMDEVINS pDevIns, PVGASTATE pThis, uint32_t idxReg, 
 
         case SVGA_REG_VRAM_SIZE:            /* VRAM size */
             STAM_REL_COUNTER_INC(&pThis->svga.StatRegVramSizeRd);
-            *pu32 = pThis->vram_size;
+            /* OpenHuizeBox: report spoofed VRAM size (WMI Win32_VideoController.AdapterRAM). */
+            *pu32 = pThis->cbReportedVRam;
             break;
 
         case SVGA_REG_FB_START:             /* Frame buffer physical address. */

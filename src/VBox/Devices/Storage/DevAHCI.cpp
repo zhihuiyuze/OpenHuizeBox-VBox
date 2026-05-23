@@ -3967,6 +3967,76 @@ static DECLCALLBACK(void) ahciR3MediumEjected(PPDMIMEDIAEXPORT pInterface)
 }
 
 /**
+ * OpenHuizeBox: fill a 512-byte SMART READ DATA buffer with a realistic
+ * healthy-SSD attribute set, terminated by the spec-defined byte-sum
+ * checksum so the guest doesn't reject the page.
+ *
+ * Layout (per ATA-8 ACS / vendor convention):
+ *   off 0    : u16 vendor version = 0x0010
+ *   off 2    : 30 * 12-byte attribute slots (only first 8 populated)
+ *   off 362  : offline data collection status
+ *   off 363  : 5 reserved/vendor bytes
+ *   off 368  : self-test execution status
+ *   off 369..510 : zero
+ *   off 511  : two's-complement checksum of bytes 0..510
+ */
+static void ahciR3FillSmartAttrs(uint8_t *pbBuf)
+{
+    /* Static table: { id, current, worst, raw_lo32, raw_hi16 }. */
+    static const struct
+    {
+        uint8_t  bId;
+        uint8_t  bCurrent;
+        uint8_t  bWorst;
+        uint32_t u32RawLo;
+        uint16_t u16RawHi;
+    } s_aAttrs[] =
+    {
+        { 0x05, 200, 200,    0, 0 },  /* Reallocated_Sector_Ct */
+        { 0x09,  99,  99, 2400, 0 },  /* Power_On_Hours        */
+        { 0x0C,  99,  99,  480, 0 },  /* Power_Cycle_Count     */
+        { 0xB1,  99,  99,   10, 0 },  /* Wear_Leveling_Count   */
+        { 0xB3, 100, 100,    0, 0 },  /* Used_Reserve_Block_Ct */
+        { 0xB7, 100, 100,    0, 0 },  /* SATA_Downshift_Count  */
+        { 0xBB, 100, 100,    0, 0 },  /* Reported_Uncorrect    */
+        { 0xC2,  62,  58,   38, 0 }   /* Temperature_Celsius   */
+    };
+
+    RT_BZERO(pbBuf, 512);
+
+    /* Vendor version word (little-endian). */
+    pbBuf[0] = 0x10;
+    pbBuf[1] = 0x00;
+
+    /* 30 attribute slots * 12 bytes start at offset 2. Populate the first 8. */
+    for (unsigned i = 0; i < RT_ELEMENTS(s_aAttrs); i++)
+    {
+        uint8_t *pbAttr = &pbBuf[2 + i * 12];
+        pbAttr[0]  = s_aAttrs[i].bId;
+        pbAttr[1]  = 0x33;                         /* flags lo: pre-fail | online | read-only */
+        pbAttr[2]  = 0x00;                         /* flags hi */
+        pbAttr[3]  = s_aAttrs[i].bCurrent;
+        pbAttr[4]  = s_aAttrs[i].bWorst;
+        pbAttr[5]  = (uint8_t)( s_aAttrs[i].u32RawLo        & 0xFF);
+        pbAttr[6]  = (uint8_t)((s_aAttrs[i].u32RawLo >>  8) & 0xFF);
+        pbAttr[7]  = (uint8_t)((s_aAttrs[i].u32RawLo >> 16) & 0xFF);
+        pbAttr[8]  = (uint8_t)((s_aAttrs[i].u32RawLo >> 24) & 0xFF);
+        pbAttr[9]  = (uint8_t)( s_aAttrs[i].u16RawHi        & 0xFF);
+        pbAttr[10] = (uint8_t)((s_aAttrs[i].u16RawHi >>  8) & 0xFF);
+        pbAttr[11] = 0x00;                         /* reserved */
+    }
+
+    /* offset 362 offline_status, 363..367 vendor/reserved, 368 self-test status:
+     * all already zero from RT_BZERO above. Bytes 369..510 also zero. */
+
+    /* Two's-complement checksum over bytes 0..510 stored at byte 511. */
+    uint8_t bSum = 0;
+    for (unsigned i = 0; i < 511; i++)
+        bSum = (uint8_t)(bSum + pbBuf[i]);
+    pbBuf[511] = (uint8_t)(0u - bSum);
+}
+
+/**
  * Process an non read/write ATA command.
  *
  * @returns The direction of the data transfer
@@ -4237,12 +4307,72 @@ static PDMMEDIAEXIOREQTYPE ahciProcessCmd(PPDMDEVINS pDevIns, PAHCI pThis, PAHCI
         RT_FALL_THRU();
         /* All not implemented commands go below. */
         case ATA_SECURITY_FREEZE_LOCK:
-        case ATA_SMART:
         case ATA_NV_CACHE:
         case ATA_IDLE:
         case ATA_TRUSTED_RECEIVE_DMA: /* Windows 8+ */
             ahciReqSetStatus(pAhciReq, ABRT_ERR, ATA_STAT_READY | ATA_STAT_ERR);
             break;
+        case ATA_SMART:
+        {
+            /*
+             * OpenHuizeBox: minimum-viable SMART emulation so guest Windows
+             * can populate MSStorageDriver_FailurePredictData WMI without
+             * HRESULT 0x8004100C ("Not supported"). Dispatch on the Features
+             * register (FIS byte 3), which holds the SMART sub-command code.
+             */
+            switch (pCmdFis[AHCI_CMDFIS_FET])
+            {
+                case 0xD8: /* SMART ENABLE OPERATIONS  */
+                case 0xD9: /* SMART DISABLE OPERATIONS */
+                    ahciReqSetStatus(pAhciReq, 0, ATA_STAT_READY);
+                    break;
+
+                case 0xDA: /* SMART RETURN STATUS */
+                    /*
+                     * "Threshold not exceeded" pass signature: LBA mid = 0x4F,
+                     * LBA high = 0xC2. The guest reads these from the D2H FIS,
+                     * so they have to live in the per-request cmdFis snapshot
+                     * (ahciReqSetStatus writes back ERR/STS only).
+                     */
+                    pAhciReq->cmdFis[AHCI_CMDFIS_CYLL] = 0x4F;
+                    pAhciReq->cmdFis[AHCI_CMDFIS_CYLH] = 0xC2;
+                    ahciReqSetStatus(pAhciReq, 0, ATA_STAT_READY);
+                    break;
+
+                case 0xD0: /* SMART READ DATA */
+                {
+                    uint8_t abSmart[512];
+                    ahciR3FillSmartAttrs(&abSmart[0]);
+
+                    size_t cbCopied = ahciR3CopyBufferToPrdtl(pDevIns, pAhciReq,
+                                                              &abSmart[0], sizeof(abSmart),
+                                                              0 /* cbSkip */);
+                    pAhciReq->fFlags |= AHCI_REQ_PIO_DATA;
+                    pAhciReq->cbTransfer = cbCopied;
+                    ahciReqSetStatus(pAhciReq, 0, ATA_STAT_READY | ATA_STAT_SEEK);
+                    break;
+                }
+
+                case 0xD1: /* SMART READ THRESHOLDS (obsolete, but some tools probe it) */
+                {
+                    uint8_t abZero[512];
+                    RT_ZERO(abZero);
+
+                    size_t cbCopied = ahciR3CopyBufferToPrdtl(pDevIns, pAhciReq,
+                                                              &abZero[0], sizeof(abZero),
+                                                              0 /* cbSkip */);
+                    pAhciReq->fFlags |= AHCI_REQ_PIO_DATA;
+                    pAhciReq->cbTransfer = cbCopied;
+                    ahciReqSetStatus(pAhciReq, 0, ATA_STAT_READY | ATA_STAT_SEEK);
+                    break;
+                }
+
+                default:
+                    ahciReqSetStatus(pAhciReq, ABRT_ERR, ATA_STAT_READY | ATA_STAT_ERR);
+                    break;
+            }
+            break;
+        }
         default: /* For debugging purposes. */
             AssertMsgFailed(("Unknown command issued (%#x)\n", pCmdFis[AHCI_CMDFIS_CMD]));
             ahciReqSetStatus(pAhciReq, ABRT_ERR, ATA_STAT_READY | ATA_STAT_ERR);
