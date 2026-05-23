@@ -4371,6 +4371,10 @@ static DECLCALLBACK(int) acpiR3Construct(PPDMDEVINS pDevIns, int iInstance, PCFG
                                   "|AcpiOemTabId"
                                   "|AcpiCreatorId"
                                   "|AcpiCreatorRev"
+                                  /* OpenHuizeBox: CPU SSDT OEM Table ID override
+                                   * (default AAAACPUS; replaces hardcoded VBOXCPUT
+                                   * that leaks into HKLM\HARDWARE\ACPI\SSDT subkey). */
+                                  "|AcpiCpuTableId"
                                   "|CustomTable"
                                   "|CustomTable0"
                                   "|CustomTable1"

@@ -87,8 +87,20 @@ static int acpiCreateCpuSsdt(PPDMDEVINS pDevIns, uint8_t **ppabAml, size_t *pcbA
     if (!fShowCpu)
         cCpus = 0;
 
+    /* OpenHuizeBox: SSDT OEM strings used to be hardcoded "VBOX  "/"VBOXCPUT"/
+     * "VBOX" — Windows registers them under HKLM\HARDWARE\ACPI\SSDT\VBOX__\
+     * which Pafish-class detectors grep. Pull from the same CFGM keys the
+     * DSDT path uses so a single profile setting (AcpiOemId / AcpiCreatorId)
+     * scrubs all ACPI tables. Defaults match DevACPI.cpp DSDT defaults. */
+    char szOemId[8] = "ALASKA";
+    char szCreator[8] = "AMI ";
+    char szCpuTblId[16] = "AAAACPUS";
+    pHlp->pfnCFGMQueryStringDef(pDevIns->pCfg, "AcpiOemId",     szOemId,     sizeof(szOemId),     "ALASKA");
+    pHlp->pfnCFGMQueryStringDef(pDevIns->pCfg, "AcpiCreatorId", szCreator,   sizeof(szCreator),   "AMI ");
+    pHlp->pfnCFGMQueryStringDef(pDevIns->pCfg, "AcpiCpuTableId",szCpuTblId,  sizeof(szCpuTblId),  "AAAACPUS");
+
     RTACPITBL hAcpiTbl;
-    rc = RTAcpiTblCreate(&hAcpiTbl, ACPI_TABLE_HDR_SIGNATURE_SSDT, 1, "VBOX  ", "VBOXCPUT", 2, "VBOX", RTBldCfgRevision());
+    rc = RTAcpiTblCreate(&hAcpiTbl, ACPI_TABLE_HDR_SIGNATURE_SSDT, 1, szOemId, szCpuTblId, 2, szCreator, RTBldCfgRevision());
     if (RT_SUCCESS(rc))
     {
         RTAcpiTblScopeStart(hAcpiTbl, "\\_PR");
@@ -142,8 +154,16 @@ static int acpiCreateCpuHotplugSsdt(PPDMDEVINS pDevIns, uint8_t **ppabAml, size_
     if (RT_FAILURE(rc))
         return rc;
 
+    /* OpenHuizeBox: same CFGM-driven OEM strings as acpiCreateCpuSsdt above. */
+    char szOemId[8] = "ALASKA";
+    char szCreator[8] = "AMI ";
+    char szCpuTblId[16] = "AAAACPUS";
+    pHlp->pfnCFGMQueryStringDef(pDevIns->pCfg, "AcpiOemId",      szOemId,    sizeof(szOemId),    "ALASKA");
+    pHlp->pfnCFGMQueryStringDef(pDevIns->pCfg, "AcpiCreatorId",  szCreator,  sizeof(szCreator),  "AMI ");
+    pHlp->pfnCFGMQueryStringDef(pDevIns->pCfg, "AcpiCpuTableId", szCpuTblId, sizeof(szCpuTblId), "AAAACPUS");
+
     RTACPITBL hAcpiTbl;
-    rc = RTAcpiTblCreate(&hAcpiTbl, ACPI_TABLE_HDR_SIGNATURE_SSDT, 1, "VBOX  ", "VBOXCPUT", 2, "VBOX", RTBldCfgRevision());
+    rc = RTAcpiTblCreate(&hAcpiTbl, ACPI_TABLE_HDR_SIGNATURE_SSDT, 1, szOemId, szCpuTblId, 2, szCreator, RTBldCfgRevision());
     if (RT_SUCCESS(rc))
     {
         uint8_t const cCpuSuff = RT_ELEMENTS(g_achCpuSuff);
