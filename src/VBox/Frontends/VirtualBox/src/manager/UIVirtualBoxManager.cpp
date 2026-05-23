@@ -98,6 +98,7 @@
 #include "UIMessageCenter.h"
 #include "UIModalWindowManager.h"
 #include "UINetworkManager.h"
+#include "UIOhbRttDriver.h"
 #include "UINotificationCenter.h"
 #include "UIQObjectStuff.h"
 #include "UITranslationEventListener.h"
@@ -621,6 +622,8 @@ UIVirtualBoxManager::UIVirtualBoxManager()
     , m_fSnapshotCloneByDefault(false)
     , m_fImportFromOCI(false)
     , m_fExportToOCI(false)
+    , m_pOhbRttDriver(0)
+    , m_pOhbRttAction(0)
 {
     s_pInstance = this;
     setAcceptDrops(true);
@@ -2577,6 +2580,50 @@ void UIVirtualBoxManager::prepareMenuBar()
      * consolidated identity tab. Removed in v1.0 -- users now create a VM via the
      * stock Machine > New wizard, then open Settings > OpenHuizeBox on the result.
      * See src/VBox/Frontends/VirtualBox/src/settings/machine/UIMachineSettingsOhbIdentity.{h,cpp}. */
+
+    /* ===== Live group (host-side activity injection during a run) ===== */
+    pOhbMenu->addSection(QString::fromUtf8("Live"));
+
+    /* Activity Simulator toggle. When checked, drives synthetic mouse +
+     * Enter scancodes into the currently selected running VM via the
+     * IConsole.Mouse / IConsole.Keyboard COM API. Nothing is installed in
+     * the guest -- the guest sees emulated PS/2 hardware input, so any
+     * user-mode sandbox-RTT detector (Pafish, al-khaser, etc.) cannot tell
+     * the activity from a real seated user. See docs/ARCHITECTURE.md
+     * threat-model note: "no agent inside the guest by default". */
+    m_pOhbRttDriver = new UIOhbRttDriver(this);
+    connect(m_pOhbRttDriver, &UIOhbRttDriver::sigAutoStopped, this, [this]() {
+        if (m_pOhbRttAction)
+            m_pOhbRttAction->setChecked(false);
+    });
+    m_pOhbRttAction = pOhbMenu->addAction(QString::fromUtf8("Activity Simulator (selected running VM)"));
+    m_pOhbRttAction->setCheckable(true);
+    m_pOhbRttAction->setToolTip(QString::fromUtf8(
+        "Drives synthetic mouse moves, clicks and Enter into the currently "
+        "selected running VM from the host. Defeats sandbox reverse-turing "
+        "checks (mouse activity, dialog confirmation) without installing "
+        "anything inside the guest."));
+    connect(m_pOhbRttAction, &QAction::toggled, this, [this](bool fOn) {
+        if (fOn) {
+            UIVirtualMachineItem *pItem = currentItem();
+            if (!pItem) {
+                QMessageBox::information(0, QString::fromUtf8("OpenHuizeBox"),
+                    QString::fromUtf8("Select a running VM in the list first."));
+                m_pOhbRttAction->setChecked(false);
+                return;
+            }
+            if (!m_pOhbRttDriver->start(pItem->id())) {
+                QMessageBox::warning(0, QString::fromUtf8("OpenHuizeBox"),
+                    QString::fromUtf8("Cannot attach the activity simulator. The VM must be in "
+                                      "the Running (or Paused) state and must not already hold "
+                                      "an exclusive session lock."));
+                m_pOhbRttAction->setChecked(false);
+                return;
+            }
+        } else {
+            m_pOhbRttDriver->stop();
+        }
+    });
 
     /* ===== Audit group (read-only — no side effects on any VM) ===== */
     pOhbMenu->addSection(QString::fromUtf8("Audit"));

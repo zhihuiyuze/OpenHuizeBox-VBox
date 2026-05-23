@@ -46,10 +46,12 @@
 
 /* Forward declarations: */
 class QMenu;
+class QAction;
 class QIManagerDialog;
 class UIAction;
 class UIActionPool;
 class UINativeWizard;
+class UIOhbRttDriver;
 struct UIUnattendedInstallData;
 class UIVirtualBoxWidget;
 class UIVirtualMachineItem;
@@ -554,6 +556,15 @@ private:
 
     /** Holds the ID of medium used by clone VD wizard. */
     QUuid  m_uMediumId;
+
+    /** OpenHuizeBox host-side sandbox-RTT driver. Owned by this window;
+     *  drives synthetic mouse/keyboard into the selected running VM. The
+     *  toggle action that arms it lives in the OpenHuizeBox menu. */
+    UIOhbRttDriver *m_pOhbRttDriver;
+    /** OpenHuizeBox menu toggle action for the RTT driver. Kept as a member
+     *  so we can flip its checked state back on programmatic stop (e.g. when
+     *  the target VM transitions out of Running). */
+    QAction        *m_pOhbRttAction;
 };
 
 #define gpManager UIVirtualBoxManager::instance()

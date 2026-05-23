@@ -580,6 +580,7 @@ VirtualBox_QT_MOCHDRS = \
 	src/manager/UIGlobalToolsWidget.h \
 	src/manager/UIHomePane.h \
 	src/manager/UIMachineToolsWidget.h \
+	src/manager/UIOhbRttDriver.h \
 	src/manager/UIProgressTaskReadCloudMachineList.h \
 	src/manager/UITaskCloudGetSettingsForm.h \
 	src/manager/UIToolPane.h \
@@ -981,6 +982,7 @@ VirtualBox_QT_MOCSRCS = \
 	src/cloud/consolemanager/UICloudConsoleManager.cpp \
 	src/cloud/profilemanager/UICloudProfileManager.cpp \
 	src/extensionpackmanager/UIExtensionPackManager.cpp \
+	src/manager/UIOhbRttDriver.cpp \
 	src/manager/UIVirtualBoxManager.cpp \
 	src/manager/UIVirtualMachineItemCloud.cpp \
 	src/manager/chooser/UIChooserAbstractModel.cpp \
@@ -1110,6 +1112,7 @@ VirtualBox_SOURCES = \
 	src/manager/UIGlobalToolsWidget.cpp \
 	src/manager/UIHomePane.cpp \
 	src/manager/UIMachineToolsWidget.cpp \
+	src/manager/UIOhbRttDriver.cpp \
 	src/manager/UIProgressTaskReadCloudMachineList.cpp \
 	src/manager/UITaskCloudGetSettingsForm.cpp \
 	src/manager/UIToolPane.cpp \
