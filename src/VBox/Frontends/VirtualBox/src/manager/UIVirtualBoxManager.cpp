@@ -45,6 +45,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -2596,13 +2597,18 @@ void UIVirtualBoxManager::prepareMenuBar()
         if (m_pOhbRttAction)
             m_pOhbRttAction->setChecked(false);
     });
-    m_pOhbRttAction = pOhbMenu->addAction(QString::fromUtf8("Activity Simulator (selected running VM)"));
+    m_pOhbRttAction = pOhbMenu->addAction(QString::fromUtf8("Activity Simulator (selected running VM)\tCtrl+Shift+M"));
     m_pOhbRttAction->setCheckable(true);
+    m_pOhbRttAction->setShortcut(QKeySequence("Ctrl+Shift+M"));
+    /* WindowShortcut: fires while any widget within the manager window has
+     * focus, including the VM list / toolbar / search box -- so the toggle
+     * is reachable from anywhere in the manager without hunting the menu. */
+    m_pOhbRttAction->setShortcutContext(Qt::WindowShortcut);
     m_pOhbRttAction->setToolTip(QString::fromUtf8(
         "Drives synthetic mouse moves, clicks and Enter into the currently "
         "selected running VM from the host. Defeats sandbox reverse-turing "
         "checks (mouse activity, dialog confirmation) without installing "
-        "anything inside the guest."));
+        "anything inside the guest. Shortcut: Ctrl+Shift+M."));
     connect(m_pOhbRttAction, &QAction::toggled, this, [this](bool fOn) {
         if (fOn) {
             UIVirtualMachineItem *pItem = currentItem();
