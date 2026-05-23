@@ -100,6 +100,12 @@ private:
      *  Pafish's "plausible" window (500-5000ms after a dialog appears). */
     QDateTime  m_lastEnter;
 
+    /** Deadline at which a held LMB-down should be released. The hold window
+     *  is ~120ms so pafish's 100ms-resolution GetAsyncKeyState polling loop
+     *  catches the down-state on at least one sample. Null QDateTime when no
+     *  click is currently held. */
+    QDateTime  m_pendingClickUpAt;
+
     /** Counts ticks since the last liveness check. Once per second we make
      *  sure the session is still locked + the console is still around; if
      *  not, we auto-stop and tell anyone watching to flip their toggle. */

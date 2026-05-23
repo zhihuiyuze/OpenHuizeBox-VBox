@@ -7,6 +7,7 @@
  */
 
 #include <QTimer>
+#include <QThread>
 #include <QVector>
 #include <QRandomGenerator>
 
@@ -163,30 +164,42 @@ void UIOhbRttDriver::sltTick()
 
     QRandomGenerator *rng = QRandomGenerator::global();
 
-    /* 1) random relative cursor jitter. We use PutMouseEvent (PS/2 relative
-     * deltas) rather than PutMouseEventAbsolute -- absolute mode requires the
-     * guest to negotiate the capability (typically via Guest Additions), and
-     * since OHB builds with VBOX_WITHOUT_ADDITIONS=1 absolute injection is
-     * silently dropped. Relative deltas work against the bare PS/2 emulation
-     * and any HID mouse driver. */
+    /* 1) cursor jitter. We send BOTH absolute and relative deltas every tick:
+     *   - Absolute (1-based pixel coords) lands when the guest exposes
+     *     IMouse.absoluteSupported -- it covers Win10 with the VBox USB
+     *     tablet (hidpointing=usbtablet, on by default in OHB profiles)
+     *     since the inbox HID driver understands the absolute report.
+     *   - Relative (PS/2 dx/dy) lands when only the bare PS/2 mouse is
+     *     active. Sending both is harmless: each device path advances cursor
+     *     independently; whichever is active is what win32k uses. The
+     *     redundancy fixes the failure mode where one path is silently
+     *     ignored because the guest never negotiated that capability. */
     const int dx = (int)rng->bounded(2 * kJitterPx + 1) - kJitterPx;
     const int dy = (int)rng->bounded(2 * kJitterPx + 1) - kJitterPx;
-    /* Track the synthesised position for clamping/logging only -- the actual
-     * cursor position is wherever the guest cursor lands after applying the
-     * deltas, not our internal accumulator. */
     m_pos.setX(qBound(kEdgeGuardPx, m_pos.x() + dx, m_screenW - kEdgeGuardPx));
     m_pos.setY(qBound(kEdgeGuardPx, m_pos.y() + dy, m_screenH - kEdgeGuardPx));
+    m_mouse.PutMouseEventAbsolute(m_pos.x() + 1, m_pos.y() + 1, 0, 0, 0);
     m_mouse.PutMouseEvent(dx, dy, 0, 0, 0);
 
     const QDateTime nowDt = QDateTime::currentDateTime();
 
-    /* 2) periodic single click -- defeats GetAsyncKeyState(VK_LBUTTON). */
+    /* 2) periodic single click -- defeats GetAsyncKeyState(VK_LBUTTON).
+     * Hold the button down for ~120ms so pafish's 100ms-resolution polling
+     * loop catches the down-state reliably. */
     if (m_lastClick.msecsTo(nowDt) > m_nextClickAfterMs)
     {
+        m_mouse.PutMouseEventAbsolute(m_pos.x() + 1, m_pos.y() + 1, 0, 0, 0x01);
         m_mouse.PutMouseEvent(0, 0, 0, 0, 0x01);
-        m_mouse.PutMouseEvent(0, 0, 0, 0, 0x00);
+        m_pendingClickUpAt = nowDt.addMSecs(120);
         m_lastClick        = nowDt;
         m_nextClickAfterMs = kClickMinMs + (int)rng->bounded(kClickJitterMs);
+    }
+    /* Release click after the hold window. */
+    if (m_pendingClickUpAt.isValid() && nowDt >= m_pendingClickUpAt)
+    {
+        m_mouse.PutMouseEventAbsolute(m_pos.x() + 1, m_pos.y() + 1, 0, 0, 0x00);
+        m_mouse.PutMouseEvent(0, 0, 0, 0, 0x00);
+        m_pendingClickUpAt = QDateTime();
     }
 
     /* 3) periodic double click. */
@@ -194,8 +207,12 @@ void UIOhbRttDriver::sltTick()
     {
         for (int i = 0; i < 2; ++i)
         {
+            m_mouse.PutMouseEventAbsolute(m_pos.x() + 1, m_pos.y() + 1, 0, 0, 0x01);
             m_mouse.PutMouseEvent(0, 0, 0, 0, 0x01);
+            QThread::msleep(40);
+            m_mouse.PutMouseEventAbsolute(m_pos.x() + 1, m_pos.y() + 1, 0, 0, 0x00);
             m_mouse.PutMouseEvent(0, 0, 0, 0, 0x00);
+            QThread::msleep(80);
         }
         m_lastDblClk     = nowDt;
         m_nextDblAfterMs = kDblClickMinMs + (int)rng->bounded(kDblClickJitterMs);
