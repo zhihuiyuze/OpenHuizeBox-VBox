@@ -84,17 +84,21 @@ extern void     __cdecl dispi_set_bank_farcall(void);
 // The current OEM Software Revision of this VBE Bios
 #define VBE_OEM_SOFTWARE_REV 0x0003
 
-// FIXME: 'merge' these (c) etc strings with the vgabios.c strings?
-char vbebios_copyright[]        = "VirtualBox VESA BIOS";
-char vbebios_vendor_name[]      = VBOX_VENDOR;
-char vbebios_product_name[]     = VBOX_PRODUCT " VBE Adapter";
-char vbebios_product_revision[] = VBOX_PRODUCT " Version " VBOX_VERSION_STRING;
+/* OpenHuizeBox: VGA BIOS strings end up in HKLM\HARDWARE\DESCRIPTION\
+ * System\VideoBiosVersion and similar registry locations after Windows
+ * scans the option-ROM area. Replace project-identifying literals with
+ * neutral OEM-style strings so memory scanners and Pafish-class
+ * VideoBiosVersion checks don't flag the build. */
+char vbebios_copyright[]        = "Intel Corporation - VBE BIOS";
+char vbebios_vendor_name[]      = "Intel Corporation";
+char vbebios_product_name[]     = "Intel(R) Display Adapter";
+char vbebios_product_revision[] = "Intel(R) UHD Graphics BIOS";
 
-char vbebios_info_string[]    = "VirtualBox VBE Display Adapter enabled\r\n\r\n";
-char no_vbebios_info_string[] = "No VirtualBox VBE support available!\r\n\r\n";
+char vbebios_info_string[]    = "VBE Display Adapter enabled\r\n\r\n";
+char no_vbebios_info_string[] = "VBE support not available\r\n\r\n";
 
 #ifdef VGA_DEBUG
-char msg_vbe_init[] = "VirtualBox Version " VBOX_VERSION_STRING " VBE Display Adapter\r\n";
+char msg_vbe_init[] = "VBE Display Adapter Init\r\n";
 #endif
 
 static void dispi_set_xres(uint16_t xres)

@@ -71,7 +71,9 @@
 #include <VBox/version.h>
 #endif
 
-static  const char  bios_cvs_version_string[] = "VirtualBox " VBOX_VERSION_STRING;
+/* OpenHuizeBox: emit a neutral OEM-style string in BIOS ROM image so
+ * memory scanners and BIOS dumpers don't see literal "VirtualBox". */
+static  const char  bios_cvs_version_string[] = "American Megatrends Inc. " VBOX_VERSION_STRING;
 
 uint8_t inb_cmos(uint8_t cmos_reg)
 {
@@ -163,7 +165,11 @@ void set_mode(uint8_t mode);
 //#undef VBOX
 
 #define BX_PCIBIOS  1
-#define BX_APPNAME          "VirtualBox"
+/* OpenHuizeBox: BIOS banner string (BX_APPNAME) gets compiled into the
+ * ROM image and is visible to anyone dumping segments 0xF000-0xFFFF.
+ * Replace with an AMI-style name so the ROM dump matches the SMBIOS/
+ * ACPI OEM strings (ALASKA / A M I) we report elsewhere. */
+#define BX_APPNAME          "American Megatrends"
 #define BIOS_BUILD_DATE     __DATE__
 //--------------------------------------------------------------------------
 // print_bios_banner
