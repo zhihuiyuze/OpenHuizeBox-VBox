@@ -264,6 +264,15 @@ struc HMR0PERVCPU
     alignb 4
     .fWorldSwitcher                 resd    1
     .uTscExit                       resq    1
+%ifdef VBOX_WITH_OHB_VMX_STEALTH
+    ; MUST mirror struct HMR0PERVCPU in HMInternal.h around line 1115.
+    ; Without this, asm world-switcher reads .svm at a stale offset and
+    ; loads a garbage HCPhysVmcbHost into RAX -> VMSAVE [rax] BSODs with
+    ; 0x3B SYSTEM_SERVICE_EXCEPTION on every VM start when the C side
+    ; sees the macro and asm side does not.
+    alignb 8
+    .i64OhbTscHandlerAccum          resq    1
+%endif
 
     alignb 8
     .vmx                            resb    HMR0CPUVMX_size

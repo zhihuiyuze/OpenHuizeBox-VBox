@@ -15,6 +15,9 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #define LOG_GROUP LOG_GROUP_HM
+#include "HMInternal.h"          /* MUST be before vmcc.h — sets the
+                                  * VMM_INCLUDED_SRC_include_HMInternal_h
+                                  * guard that exposes VM::hm.s. */
 #include <VBox/vmm/vmcc.h>
 #include <VBox/log.h>
 #include "OhbVmxStealthR0.h"

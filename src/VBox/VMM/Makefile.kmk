@@ -89,6 +89,13 @@ endif
 if "$(KBUILD_TYPE)" == "debug" && "$(USERNAME)" == "bird" && 0
  VBoxVMM_DEFS   += RTMEM_WRAP_TO_EF_APIS
 endif
+# OpenHuizeBox: propagate stealth feature flag to VBoxVMM (ring-3).
+# VMMR0_DEFS is assigned with `=` further down in this file (around the
+# "# VMMR0.r0" section), so we have to add a SECOND copy in that block
+# to survive the reassignment — see lines ~979.
+ifdef VBOX_WITH_OHB_VMX_STEALTH
+ VBoxVMM_DEFS   += VBOX_WITH_OHB_VMX_STEALTH
+endif
 if1of ($(KBUILD_TARGET).$(KBUILD_TARGET_ARCH), linux.arm64)
  VBoxVMM_DEFS   += VMM_HOST_PAGE_SIZE_DYNAMIC
 endif
@@ -971,6 +978,15 @@ if defined(VBOX_WITH_R0_MODULES) && !defined(VBOX_ONLY_BUILD)
  ifdef VBOX_WITH_DBGF_TRACING
   VMMR0_DEFS     += VBOX_WITH_DBGF_TRACING
  endif
+ # OpenHuizeBox: propagating VBOX_WITH_OHB_VMX_STEALTH into VMMR0_DEFS
+ # is the technically-correct fix (matches src/VBox/Devices/Makefile.kmk
+ # which adds it to VBoxDD_DEFS), BUT it currently exposes pre-existing
+ # latent bugs in the fork's HM stealth code that cause guest hangs at
+ # boot on AMD-V. Keep disabled until the fork's HM code compiles
+ # cleanly with the macro on. Tracking: TESTING.md.
+ #ifdef VBOX_WITH_OHB_VMX_STEALTH
+ # VMMR0_DEFS     += VBOX_WITH_OHB_VMX_STEALTH
+ #endif
  if1of ($(KBUILD_TARGET), darwin linux win)
   VMMR0_DEFS     += VMM_R0_TOUCH_FPU
  endif

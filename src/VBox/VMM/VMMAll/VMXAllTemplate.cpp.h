@@ -275,6 +275,12 @@ static FNVMXEXITHANDLERNSRC        vmxHCExitSetPendingXcptUD;
 #endif
 static FNVMXEXITHANDLERNSRC        vmxHCExitErrInvalidGuestState;
 static FNVMXEXITHANDLERNSRC        vmxHCExitErrUnexpected;
+#ifdef VBOX_WITH_OHB_VMX_STEALTH
+/* OpenHuizeBox descriptor-table-spoof handlers — referenced from
+ * g_aVMExitHandlers[46/47] and defined further down at lines ~8486/8564. */
+static FNVMXEXITHANDLER            vmxHCExitOhbGdtrIdtrAccess;
+static FNVMXEXITHANDLER            vmxHCExitOhbLdtrTrAccess;
+#endif
 /** @} */
 
 #ifdef VBOX_WITH_NESTED_HWVIRT_VMX
