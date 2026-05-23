@@ -1987,6 +1987,30 @@ DefinitionBlock ("DSDT.aml", "DSDT", 2, "ALASKA", "A M I   ", 2)
         DBG ("Prepare to sleep: ")
         HEX (Arg0)
     }
+
+    //
+    // Thermal zone for CPU temperature reporting.
+    //
+    // _TMP returns the current temperature in tenths of a Kelvin. The
+    // value here corresponds to ~45 C (a typical idle reading on a
+    // laptop or small-form-factor desktop). _CRT/_HOT/_PSV provide the
+    // critical, hot and passive thresholds; _TZP is the sampling
+    // period (100 ms units).
+    //
+    // Without this thermal zone, the MSAcpi_ThermalZoneTemperature
+    // WMI class is unimplemented and queries fail with HRESULT
+    // 0x8004100c. Many monitoring utilities (HWiNFO, OpenHardware
+    // Monitor, Core Temp) and inventory tools rely on this class.
+    //
+    Device (\_TZ.TZ00)
+    {
+        Name (_HID, EisaId ("PNP0C0B"))                     // Cooling Device
+        Method (_TMP, 0, NotSerialized) { Return (3182) }   // 318.2 K = 45.0 C
+        Method (_CRT, 0, NotSerialized) { Return (3732) }   // 100 C critical
+        Method (_HOT, 0, NotSerialized) { Return (3632) }   //  90 C hot
+        Method (_PSV, 0, NotSerialized) { Return (3582) }   //  85 C passive
+        Name   (_TZP, 0x0A)                                 // 1.0 s poll
+    }
 }
 
 /*
