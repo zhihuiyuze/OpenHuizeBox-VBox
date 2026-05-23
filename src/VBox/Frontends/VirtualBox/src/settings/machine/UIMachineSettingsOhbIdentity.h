@@ -66,6 +66,9 @@ private slots:
     void sltProfileSelectionChanged(int iIndex);
     /** [Load profile] button clicked: copy profile values into all field widgets. */
     void sltLoadProfileClicked();
+    /** [Apply Stealth Level] button clicked: pick None/L1/L2 preset and fill all
+     *  field widgets + checkboxes accordingly. The save path persists them. */
+    void sltApplyStealthLevelClicked();
     /** Stealth master toggled: cascade sub-toggles to follow when transitioning to ON. */
     void sltStealthMasterToggled(bool fChecked);
     /** MAC mode radio changed: enable/disable OUI combo + full-MAC line edit. */
@@ -114,6 +117,12 @@ private:
     /** @name Widgets - top-level
      * @{ */
         QScrollArea *m_pScrollArea;
+    /** @} */
+
+    /** @name Widgets - Stealth Level (quick preset)
+     * @{ */
+        QComboBox   *m_pCmbStealthLevel;
+        QPushButton *m_pBtnApplyStealthLevel;
     /** @} */
 
     /** @name Widgets - 1-click preset

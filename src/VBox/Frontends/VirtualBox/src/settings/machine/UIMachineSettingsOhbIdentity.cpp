@@ -233,6 +233,7 @@ namespace
 UIMachineSettingsOhbIdentity::UIMachineSettingsOhbIdentity()
     : m_pCache(0)
     , m_pScrollArea(0)
+    , m_pCmbStealthLevel(0), m_pBtnApplyStealthLevel(0)
     , m_pComboProfile(0), m_pLblProfileLast(0), m_pBtnLoadProfile(0)
     , m_pChkStealthMaster(0), m_pChkHideDescTables(0)
     , m_pEdtFakeIdtrBase(0), m_pEdtFakeIdtrLimit(0)
@@ -796,6 +797,52 @@ void UIMachineSettingsOhbIdentity::sltLoadProfileClicked()
         m_pLblProfileLast->setText(tr("Last loaded: %1").arg(strChosen));
 }
 
+void UIMachineSettingsOhbIdentity::sltApplyStealthLevelClicked()
+{
+    if (!m_pCmbStealthLevel) return;
+    const QString strLvl = m_pCmbStealthLevel->currentData().toString();
+
+    if (strLvl == QLatin1String("none"))
+    {
+        /* Disable every VMM-level stealth flag; leave SMBIOS / ACPI / MAC /
+         * Disk fields alone so the user can clear them manually if they want
+         * the rawest possible VBox identity. */
+        if (m_pChkStealthMaster)  m_pChkStealthMaster->setChecked(false);
+        if (m_pChkHideDescTables) m_pChkHideDescTables->setChecked(false);
+        if (m_pEdtTscOffsetBias)  m_pEdtTscOffsetBias->setText(QString::number(0));
+        return;
+    }
+
+    /* L1 and L2 share the same hardware-identity bundle: load the Lenovo
+     * ThinkPad T14 profile (a known-good Notebook-class identity). The
+     * existing profile loader already handles SMBIOS / ACPI / MAC / Disk
+     * fields; we just trigger it programmatically. */
+    if (m_pComboProfile)
+    {
+        const int iIdx = m_pComboProfile->findText(QLatin1String("lenovo_thinkpad_t14"));
+        if (iIdx >= 0) m_pComboProfile->setCurrentIndex(iIdx);
+    }
+    if (m_pBtnLoadProfile)
+        m_pBtnLoadProfile->click();
+
+    /* L1 stops here -- no VMM-level changes. */
+    if (strLvl == QLatin1String("l1"))
+    {
+        if (m_pChkStealthMaster)  m_pChkStealthMaster->setChecked(false);
+        if (m_pChkHideDescTables) m_pChkHideDescTables->setChecked(false);
+        return;
+    }
+
+    /* L2: enable VMM-level descriptor-table spoof + plausible Windows-x64
+     * IDTR / GDTR base values (match HMR3-x86.cpp defaults). */
+    if (m_pChkStealthMaster)  m_pChkStealthMaster->setChecked(true);
+    if (m_pChkHideDescTables) m_pChkHideDescTables->setChecked(true);
+    if (m_pEdtFakeIdtrBase  && m_pEdtFakeIdtrBase->text().isEmpty())  m_pEdtFakeIdtrBase->setText(QString::fromLatin1("0xFFFFF80000000080"));
+    if (m_pEdtFakeIdtrLimit && m_pEdtFakeIdtrLimit->text().isEmpty()) m_pEdtFakeIdtrLimit->setText(QString::fromLatin1("0x0FFF"));
+    if (m_pEdtFakeGdtrBase  && m_pEdtFakeGdtrBase->text().isEmpty())  m_pEdtFakeGdtrBase->setText(QString::fromLatin1("0xFFFFF80000002000"));
+    if (m_pEdtFakeGdtrLimit && m_pEdtFakeGdtrLimit->text().isEmpty()) m_pEdtFakeGdtrLimit->setText(QString::fromLatin1("0x007F"));
+}
+
 void UIMachineSettingsOhbIdentity::sltStealthMasterToggled(bool fChecked)
 {
     if (fChecked && m_pChkHideDescTables && !m_pChkHideDescTables->isChecked())
@@ -939,9 +986,55 @@ void UIMachineSettingsOhbIdentity::prepareWidgets()
     pHeader->setWordWrap(true);
     pContentLay->addWidget(pHeader);
 
+    /* --- Stealth Level (1-click quick preset) ---
+     *
+     * Sits above the per-profile loader. Each level is a bundle of values
+     * for the controls further down on this page; clicking [Apply] writes
+     * them into the controls (it does NOT save -- the regular OK / Apply
+     * button on the dialog persists). The help label spells out exactly
+     * what each level changes so users know what they are enabling.
+     */
+    {
+        QGroupBox *box = new QGroupBox(tr("Stealth Level (one-click preset)"));
+        QGridLayout *g = new QGridLayout(box);
+
+        g->addWidget(new QLabel(tr("<b>Pick a level, then Apply:</b>")), 0, 0, 1, 3);
+
+        m_pCmbStealthLevel = new QComboBox;
+        m_pCmbStealthLevel->addItem(tr("None  -  raw VBox (VM is detectable, no performance cost)"),
+                                    QString("none"));
+        m_pCmbStealthLevel->addItem(tr("L1 Light  -  SMBIOS / ACPI / MAC / Disk identity spoof (no performance cost)"),
+                                    QString("l1"));
+        m_pCmbStealthLevel->addItem(tr("L2 Deep  -  L1 + descriptor-table spoof + TSC compensation + PCI override (~3-5%% perf cost)"),
+                                    QString("l2"));
+        g->addWidget(m_pCmbStealthLevel, 1, 0, 1, 2);
+
+        m_pBtnApplyStealthLevel = new QPushButton(tr("Apply preset to fields"));
+        g->addWidget(m_pBtnApplyStealthLevel, 1, 2);
+
+        QLabel *pLblHelp = new QLabel(tr(
+            "<p style='color:#555; margin-top:6px;'>"
+            "<b>L1 Light:</b> Reports a Lenovo ThinkPad T14 identity (BIOS / board / "
+            "chassis / serial / MAC OUI / SSD model) to the guest OS. No VMM-level "
+            "changes -- defeats string-matching detection like \"VBOX\" in BIOS ROM, "
+            "<code>08:00:27</code> MAC OUI, <code>VBOX HARDDISK</code> in disk model. "
+            "Negligible performance impact, safe to leave on.<br><br>"
+            "<b>L2 Deep:</b> Everything in L1, plus VMM-level changes: descriptor-"
+            "table exiting (defeats SIDT/SGDT Red-Pill detection used by Pafish / "
+            "Al-Khaser / VMaware), TSC handler-cost compensation (defeats RDTSC "
+            "timing detection), per-device PCI vendor override (clears VEN_80EE "
+            "from Device Manager). Costs roughly 3-5%% on instruction-heavy "
+            "workloads because each SIDT / SGDT now traps into the hypervisor."
+            "</p>"));
+        pLblHelp->setWordWrap(true);
+        g->addWidget(pLblHelp, 2, 0, 1, 3);
+
+        pContentLay->addWidget(box);
+    }
+
     /* --- 1-click preset --- */
     {
-        QGroupBox *box = new QGroupBox(tr("1-click preset"));
+        QGroupBox *box = new QGroupBox(tr("Hardware profile (granular)"));
         QGridLayout *g = new QGridLayout(box);
         g->addWidget(new QLabel(tr("Profile:")), 0, 0);
         m_pComboProfile = new QComboBox; g->addWidget(m_pComboProfile, 0, 1);
@@ -949,6 +1042,13 @@ void UIMachineSettingsOhbIdentity::prepareWidgets()
         m_pLblProfileLast = new QLabel(tr("(no profile loaded yet)"));
         m_pLblProfileLast->setStyleSheet("color:#777;");
         g->addWidget(m_pLblProfileLast, 1, 0, 1, 3);
+        QLabel *pLblProfileHelp = new QLabel(tr(
+            "<p style='color:#555;'>Profiles ship with curated hardware identities "
+            "(Lenovo ThinkPad T14, Dell OptiPlex 7080, HP EliteBook 840 G8, MSI "
+            "PRO B650, etc.). Loading one fills SMBIOS / ACPI / MAC / Disk fields "
+            "below; you can then edit any individual field before saving.</p>"));
+        pLblProfileHelp->setWordWrap(true);
+        g->addWidget(pLblProfileHelp, 2, 0, 1, 3);
         pContentLay->addWidget(box);
     }
 
@@ -1082,6 +1182,8 @@ void UIMachineSettingsOhbIdentity::prepareConnections()
                 this, &UIMachineSettingsOhbIdentity::sltProfileSelectionChanged);
     if (m_pBtnLoadProfile)
         connect(m_pBtnLoadProfile, &QPushButton::clicked, this, &UIMachineSettingsOhbIdentity::sltLoadProfileClicked);
+    if (m_pBtnApplyStealthLevel)
+        connect(m_pBtnApplyStealthLevel, &QPushButton::clicked, this, &UIMachineSettingsOhbIdentity::sltApplyStealthLevelClicked);
     if (m_pChkStealthMaster)
         connect(m_pChkStealthMaster, &QCheckBox::toggled, this, &UIMachineSettingsOhbIdentity::sltStealthMasterToggled);
     if (m_pRadMacPool)      connect(m_pRadMacPool,      &QRadioButton::toggled, this, &UIMachineSettingsOhbIdentity::sltMacModeChanged);
